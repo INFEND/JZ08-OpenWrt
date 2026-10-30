@@ -4,9 +4,12 @@ define Device/generic-jz08-3000-nkv
   DEVICE_VENDOR := XARKON (development)
   DEVICE_MODEL := JZ08-3000-NKV 1.0 (UNVERIFIED)
   FILESYSTEMS := squashfs
+  # Compile the board-specific DTB instead of silently reusing an upstream device.
+  DEVICE_DTS := msm8916-generic-jz08-3000-nkv
   CMDLINE := "earlycon console=ttyMSM0,115200 root=PARTLABEL=jz08-unconfigured-rootfs rootwait"
   ARTIFACTS :=
   DEVICE_PACKAGES := configs-mifi wpad-basic-wolfssl rmtfs uci-usb-gadget \
-                     block-mount f2fs-tools prepare-rootfs-data msm-firmware-dumper
+                     block-mount f2fs-tools prepare-rootfs-data msm-firmware-dumper \
+                     luci luci-base luci-i18n-base-ru modemmanager
 endef
 TARGET_DEVICES += generic-jz08-3000-nkv
