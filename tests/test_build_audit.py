@@ -140,6 +140,15 @@ class BuiltImageAudit(unittest.TestCase):
         self.assertEqual(system["squashfs_superblock"]["container"], "android_sparse")
         self.assertEqual(system["squashfs_superblock"]["squashfs_superblock"]["major"], 4)
 
+    def test_android_sparse_rejects_invalid_inner_squashfs(self):
+        raw = bytearray(self.system.read_bytes())
+        raw[28:30] = (3).to_bytes(2, "little")
+        self.system.write_bytes(raw)
+        self._make_sparse_system()
+        report = self.run_audit()
+        system = next(x for x in report["build_images"] if x["path"].endswith("system.img"))
+        self.assertIn("squashfs_squashfs_v4", system["squashfs_superblock"]["failed_checks"])
+
     def test_truncated_android_sparse_image_is_rejected(self):
         self._make_sparse_system(truncate=True)
         report = self.run_audit()
