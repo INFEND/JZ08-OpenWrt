@@ -39,7 +39,14 @@ class BuiltImageAudit(unittest.TestCase):
         self.boot = self.targets / "openwrt-jz08-boot.img"
         self.system = self.targets / "openwrt-jz08-system.img"
         self.boot.write_bytes(b"ANDROID!" + bytes(4096))
-        self.system.write_bytes(bytes.fromhex("3aff26ed") + bytes(4096))
+        # Minimal internally consistent SquashFS v4 superblock fixture.
+        squashfs = bytearray(4096 + 96)
+        squashfs[:4] = bytes.fromhex("3aff26ed")
+        squashfs[4:8] = (1).to_bytes(4, "little")  # inode_count
+        squashfs[12:16] = (131072).to_bytes(4, "little")  # block_size
+        squashfs[28:30] = (4).to_bytes(2, "little")  # s_major
+        squashfs[40:48] = (4096).to_bytes(8, "little")  # bytes_used
+        self.system.write_bytes(squashfs)
 
     def run_audit(self):
         with self.assertRaises(SystemExit) as caught:
@@ -69,6 +76,20 @@ class BuiltImageAudit(unittest.TestCase):
         self.boot.write_bytes(b"BROKEN!!" + bytes(4096))
         report = self.run_audit()
         self.assertTrue(any("boot.img" in e and "header" in e for e in report["errors"]))
+
+    def test_invalid_squashfs_version_is_rejected(self):
+        image = bytearray(self.system.read_bytes())
+        image[28:30] = (3).to_bytes(2, "little")
+        self.system.write_bytes(image)
+        report = self.run_audit()
+        self.assertTrue(any("system.img" in e and "superblock" in e for e in report["errors"]))
+
+    def test_truncated_squashfs_bytes_used_is_rejected(self):
+        image = bytearray(self.system.read_bytes())
+        image[40:48] = (1000000).to_bytes(8, "little")
+        self.system.write_bytes(image)
+        report = self.run_audit()
+        self.assertTrue(any("system.img" in e and "superblock" in e for e in report["errors"]))
 
     def test_missing_essential_package_is_rejected(self):
         manifest = self.targets / "openwrt-jz08.manifest"
