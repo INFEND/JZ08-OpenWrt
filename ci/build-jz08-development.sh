@@ -55,7 +55,29 @@ if grep -Eiq 'error: recursive dependency detected|error: symbol .* depends on' 
   exit 1
 fi
 cp "$WORK/jz08-kconfig.log" "$ROOT/output/JZ08_KCONFIG.log.txt"
-grep -q '^CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y$' .config
+grep -q '^CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y
+make -j2 || make -j1 V=s
+python3 "$ROOT/ci/check_built_jz08.py" --source "$ROOT" --build-log "$ROOT/output/JZ08_KCONFIG.log.txt" --openwrt "$OW"
+printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
+# Keep diagnostic manifests only; images are excluded on purpose.
+find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
+echo "Build finished. Experimental JZ08 results are NOT for flashing."
+ .config
+# Fail fast on Kconfig deselection rather than spending an hour compiling an
+# incomplete image. Include the resulting selections in diagnostic artifacts.
+python3 - "$OW/.config" "$ROOT/output/JZ08_REQUIRED_CONFIG.txt" <<'PY'
+import pathlib, sys
+config = pathlib.Path(sys.argv[1]).read_text()
+required = ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager")
+lines = [f"CONFIG_PACKAGE_{name}=" for name in required]
+report = [next((x for x in config.splitlines() if x.startswith(prefix)),
+               prefix + "<ABSENT>") for prefix in lines]
+pathlib.Path(sys.argv[2]).write_text("\\n".join(report) + "\\n")
+print("Required OpenWrt selections:", *report, sep="\\n")
+missing = [name for name, row in zip(required, report) if row != f"CONFIG_PACKAGE_{name}=y"]
+if missing:
+    sys.exit("Kconfig rejected required JZ08 packages: " + ", ".join(missing))
+PY
 make download -j4
 make -j2 || make -j1 V=s
 python3 "$ROOT/ci/check_built_jz08.py" --source "$ROOT" --build-log "$ROOT/output/JZ08_KCONFIG.log.txt" --openwrt "$OW"
