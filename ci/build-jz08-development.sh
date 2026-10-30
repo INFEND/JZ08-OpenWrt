@@ -36,15 +36,30 @@ if grep -q 'ARTIFACTS := squashfs-gpt_both0.bin' "$OW/target/linux/msm89xx/image
   echo "Refusing unsafe artifact generator" >&2
   exit 1
 fi
+# Freeze feeds to the same November 2025-era code as the pinned OpenWrt tree.
+# Floating feeds from 2026 caused recursive Kconfig dependencies and missing LuCI.
+cat > "$OW/feeds.conf.default" <<'FEEDS'
+src-git packages https://github.com/openwrt/packages.git^1e1cc2d13483ee2759712e4d28bc1f347b1e3097
+src-git luci https://github.com/openwrt/luci.git^2eac826ea01b7b48dcdd983b1f5ceb9cc77b8f7b
+src-git routing https://github.com/openwrt/routing.git^0bf1ec3c3d9459ce8dc6fa7e1b6084518a0b5a55
+src-git telephony https://github.com/openwrt/telephony.git^6e2a8b34c5c3c69a17442898eb7cbd4d4d090769
+FEEDS
 sudo -E bash "$UP/devenv/dependencies.sh"
 cd "$OW"
 ./scripts/feeds update -a
 ./scripts/feeds install -a
-make defconfig
+make defconfig > "$WORK/jz08-kconfig.log" 2>&1 || { cat "$WORK/jz08-kconfig.log"; exit 1; }
+if grep -Eiq 'error: recursive dependency detected|error: symbol .* depends on' "$WORK/jz08-kconfig.log"; then
+  echo "FATAL: Kconfig error even if make defconfig returned zero" >&2
+  cat "$WORK/jz08-kconfig.log"
+  exit 1
+fi
+cp "$WORK/jz08-kconfig.log" "$ROOT/output/JZ08_KCONFIG.log.txt"
 grep -q '^CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y$' .config
 make download -j4
 make -j2 || make -j1 V=s
-printf 'JZ08_BUILD_SUCCEEDED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
+python3 "$ROOT/ci/check_built_jz08.py" --source "$ROOT" --build-log "$ROOT/output/JZ08_KCONFIG.log.txt" --openwrt "$OW"
+printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
 # Keep diagnostic manifests only; images are excluded on purpose.
 find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
 echo "Build finished. Experimental JZ08 results are NOT for flashing."
