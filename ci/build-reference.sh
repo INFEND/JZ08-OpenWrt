@@ -25,7 +25,7 @@ test "$(git -C "$OW" rev-parse HEAD)" = "$PIN_OW"
 cp -a "$UP/msm89xx" "$OW/target/linux/msm89xx"
 cp -a "$UP/packages" "$OW/package/msm8916"
 # Correct two old directory prefixes in the pinned, public upstream patch.
-sed -e 's#a/oopenwrt/#a/#g' -e 's#b/openwrt/#b/#g' "$UP/enable_wcn36xx_mac80211.patch" > "$WORK/wcn36xx.patch"
+sed -e 's#a/oopenwrt/#a/#g' -e 's#a/openwrt/#a/#g' -e 's#b/openwrt/#b/#g' "$UP/enable_wcn36xx_mac80211.patch" > "$WORK/wcn36xx.patch"
 git -C "$OW" apply --check "$WORK/wcn36xx.patch"
 git -C "$OW" apply "$WORK/wcn36xx.patch"
 cp "$UP/diffconfig_mf68e" "$OW/.config"
