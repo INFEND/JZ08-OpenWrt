@@ -1,0 +1,7 @@
+# Build-only profile: does not authorize installation.
+CONFIG_TARGET_msm89xx=y
+CONFIG_TARGET_msm89xx_msm8916=y
+CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y
+# LCD and modem drivers need hardware validation.
+# CONFIG_PACKAGE_kmod-fbtft-jz08=y
+# CONFIG_PACKAGE_luci-i18n-base-ru=y

@@ -1,0 +1,12 @@
+# Build-only experimental device. ARTIFACTS intentionally empty.
+define Device/generic-jz08-3000-nkv
+  $(Device/msm8916)
+  DEVICE_VENDOR := XARKON (development)
+  DEVICE_MODEL := JZ08-3000-NKV 1.0 (UNVERIFIED)
+  FILESYSTEMS := squashfs
+  CMDLINE := "earlycon console=ttyMSM0,115200 root=PARTLABEL=jz08-unconfigured-rootfs rootwait"
+  ARTIFACTS :=
+  DEVICE_PACKAGES := configs-mifi wpad-basic-wolfssl rmtfs uci-usb-gadget \
+                     block-mount f2fs-tools prepare-rootfs-data msm-firmware-dumper
+endef
+TARGET_DEVICES += generic-jz08-3000-nkv

@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/* BUILD PROTOTYPE ONLY. NOT VERIFIED ON HARDWARE. LCD DISABLED. */
+/dts-v1/;
+#include "msm8916-ufi.dtsi"
+/ {
+    model = "JZ08-3000-NKV 1.0 (BUILD PROTOTYPE ONLY)";
+    compatible = "xarkon,jz08-3000-nkv", "qcom,msm8916";
+};
+&blsp_spi4 {
+    status = "disabled";
+};

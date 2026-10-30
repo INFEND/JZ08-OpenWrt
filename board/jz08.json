@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "board": "JZ08-3000-NKV 1.0",
+  "status": "development-only",
+  "soc": "qcom,msm8916",
+  "oem": {
+    "android": "4.4.4",
+    "build": "JZ_MIFI_LCD_COM_20260615",
+    "sector_size": 512,
+    "sectors": 7634944,
+    "emmc_bytes": 3909091328,
+    "gpt_partitions": 27,
+    "partition_ids": {
+      "14": "modemst2",
+      "22": "boot",
+      "23": "system",
+      "26": "recovery",
+      "27": "userdata"
+    },
+    "p22_mib": 16,
+    "p23_mib": 800,
+    "backup_sha256": "2271764802356a14b8d51ba0950abc9e1af3634e260d488cdd9128c3e4fb34bc"
+  },
+  "usb": {
+    "adb": [
+      "05c6:9024",
+      "05c6:9091"
+    ],
+    "edl": "05c6:9008",
+    "lk2nd_fastboot": "18d1:d00d"
+  },
+  "lcd": {
+    "candidates": [
+      "st7735s",
+      "nv3023a"
+    ],
+    "confirmed": null,
+    "width": 128,
+    "height": 128,
+    "spi": "blsp_spi4",
+    "spi_base": "0x078b8000",
+    "gpio_roles_verified": false,
+    "gpio_candidates": [
+      116,
+      118
+    ]
+  },
+  "proof": {
+    "edl_full_read": true,
+    "edl_p26_write_readback": true,
+    "lk2nd_fastboot": true,
+    "fastboot_ramboot_transfer": true,
+    "linux_init": false,
+    "openwrt_boot": false,
+    "wifi": false,
+    "lte": false,
+    "lcd_under_linux": false
+  },
+  "forbidden_partitions": [
+    "gpt",
+    "modemst1",
+    "modemst2",
+    "fsg",
+    "fsc",
+    "persist",
+    "aboot",
+    "sbl1",
+    "tz",
+    "rpm",
+    "hyp"
+  ],
+  "firmware_flash_allowed": false
+}

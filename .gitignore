@@ -1,0 +1,24 @@
+# Never publish OEM dumps, modem identity, calibration or keys
+*flash_emmc*
+*full_dump*
+*.img
+*.bin
+*.mbn
+*.elf
+*.zip
+*.7z
+*.log
+*.key
+*.pem
+*.p12
+*.pfx
+__pycache__/
+.pytest_cache/
+work/
+output/
+openwrt/
+upstream/
+recovery/
+secrets/
+reports/
+checksums-source.json
