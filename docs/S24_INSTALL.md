@@ -37,3 +37,23 @@ python /storage/emulated/0/Download/jz08_backup_audit.py \
 **не подтверждает, что Linux, драйверы, радиомодем или LCD работают**.
 Если файл бэкапа отсутствует, статус будет FAIL, а не ложный PASS.
 Скрипт вообще не обращается к USB/EDL/ADB и ничего не прошивает.
+
+### Готовый ZIP без распаковки (автоматический GitHub Release)
+
+[**JZ08_SAFE_BACKUP_AUDIT.zip**](https://github.com/ANTIFERMENT/JZ08-OpenWrt/releases/download/safe-preflight/JZ08_SAFE_BACKUP_AUDIT.zip)
+публикуется автоматически после успешных тестов, вместе с
+[контрольной суммой SHA-256](https://github.com/ANTIFERMENT/JZ08-OpenWrt/releases/download/safe-preflight/JZ08_SAFE_BACKUP_AUDIT.sha256).
+Не содержит прошивки и не подключается к роутеру.
+
+```bash
+pkg install -y python curl
+curl -fL --retry 3 -o /storage/emulated/0/Download/JZ08_SAFE_BACKUP_AUDIT.zip \
+  https://github.com/ANTIFERMENT/JZ08-OpenWrt/releases/download/safe-preflight/JZ08_SAFE_BACKUP_AUDIT.zip
+curl -fL --retry 3 -o /storage/emulated/0/Download/JZ08_SAFE_BACKUP_AUDIT.sha256 \
+  https://github.com/ANTIFERMENT/JZ08-OpenWrt/releases/download/safe-preflight/JZ08_SAFE_BACKUP_AUDIT.sha256
+(cd /storage/emulated/0/Download && sha256sum -c JZ08_SAFE_BACKUP_AUDIT.sha256) &&
+python /storage/emulated/0/Download/JZ08_SAFE_BACKUP_AUDIT.zip \
+  --backup /storage/emulated/0/Download/XARKON_MIFI_SAFE_COPY/flash_emmc_20261028_082457_verified.bin
+```
+
+Устанавливаемых прошивок здесь **нет**; данный ZIP предназначен только для проверки ранее сделанного дампа.
