@@ -51,6 +51,28 @@ def check(source, log, root):
             verified_dtbs.append(p)
     if not verified_dtbs:
         errors.append("no compiled JZ08 DTB with valid FDT header and board compatible")
+    # Validate actual JZ08 boot and rootfs build products, not just Kconfig.
+    # These remain on the ephemeral CI runner and are NEVER uploaded.
+    images = []
+    for suffix, magic in (("boot.img", b"ANDROID!"),
+                          ("system.img", bytes.fromhex("3aff26ed"))):
+        matches = [p for p in (root / "bin/targets").rglob("*jz08*" + suffix)
+                   if p.is_file()]
+        if len(matches) != 1:
+            errors.append(f"expected exactly one JZ08 {suffix}, found {len(matches)}")
+        for p in matches:
+            with p.open("rb") as f:
+                header = f.read(len(magic))
+            valid = header == magic and p.stat().st_size > 4096
+            if not valid:
+                errors.append(f"JZ08 {suffix} is missing its expected image header")
+            images.append({
+                "path": p.relative_to(root).as_posix(),
+                "size": p.stat().st_size,
+                "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                "header_verified": valid,
+                "published": False,
+            })
     if "DEVICE_DTS := msm8916-generic-jz08-3000-nkv" not in (
             source / "board/msm8916.mk.append").read_text():
         errors.append("JZ08 image profile does not select the JZ08 DTB")
@@ -65,6 +87,7 @@ def check(source, log, root):
                  "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
                  "verified_fdt_compatible": p in verified_dtbs}
                 for p in dtbs[:10]],
+        "build_images": images,
         "errors": errors,
     }
     out = source / "output/JZ08_BUILD_AUDIT.json"
