@@ -16,15 +16,9 @@ MUST_HAVE = {
     "uhttpd", "configs-mifi"
 }
 
-def squashfs_v4_superblock_details(path):
-    """Report safe SquashFS metadata and every failed structural check.
-
-    This does not certify filesystem contents or device compatibility.
-    """
-    size = path.stat().st_size
-    with path.open("rb") as stream:
-        sb = stream.read(96)
-    details = {"file_size": size, "superblock_size": len(sb)}
+def _squashfs_metadata(sb, logical_size):
+    """Validate the SquashFS superblock against the decoded filesystem size."""
+    details = {"file_size": logical_size, "superblock_size": len(sb)}
     if len(sb) != 96:
         details.update(valid=False, failed_checks=["superblock_length"])
         return details
@@ -38,20 +32,118 @@ def squashfs_v4_superblock_details(path):
     })
     block_size = details["block_size"]
     checks = {
-        "magic": details["magic"] == "3aff26ed",
+        "magic": details["magic"] == "68737173",  # hsqs, SquashFS LE
         "inodes": details["inode_count"] > 0,
         "block_size_range": 4096 <= block_size <= 1048576,
         "block_size_power_of_two": block_size > 0 and (block_size & (block_size - 1)) == 0,
         "squashfs_v4": (details["major"], details["minor"]) == (4, 0),
-        "bytes_used_range": 4096 <= details["bytes_used"] <= size,
+        "bytes_used_range": 96 <= details["bytes_used"] <= logical_size,
     }
     details["failed_checks"] = [name for name, passed in checks.items() if not passed]
     details["valid"] = not details["failed_checks"]
     return details
 
 
+def squashfs_v4_superblock_details(path):
+    """Accept raw SquashFS or a structurally valid Android sparse SquashFS.
+
+    Android sparse starts with 3aff26ed; this is NOT the SquashFS magic.
+    Parse every chunk and validate the decoded superblock and logical bounds.
+    No device I/O and no flash image publication.
+    """
+    import struct
+
+    size = path.stat().st_size
+    with path.open("rb") as stream:
+        first = stream.read(28)
+        if first[:4] != bytes.fromhex("3aff26ed"):
+            return {"container": "raw", **_squashfs_metadata(first + stream.read(68), size)}
+        details = {"container": "android_sparse", "file_size": size}
+        failed = []
+        if len(first) != 28:
+            return {**details, "valid": False, "failed_checks": ["sparse_header_length"]}
+        magic, major, minor, file_hdr_sz, chunk_hdr_sz, block_sz, total_blks, total_chunks, checksum = struct.unpack("<I4H4I", first)
+        details.update(sparse_major=major, sparse_minor=minor, sparse_block_size=block_sz,
+                       sparse_blocks=total_blks, sparse_chunks=total_chunks,
+                       expanded_size=total_blks * block_sz)
+        if major != 1 or minor != 0 or file_hdr_sz < 28 or chunk_hdr_sz < 12 or file_hdr_sz > size:
+            failed.append("sparse_header")
+        if block_sz < 4096 or block_sz > 1048576 or block_sz & (block_sz - 1):
+            failed.append("sparse_block_size")
+        if total_blks == 0 or total_chunks == 0 or total_chunks > 1000000:
+            failed.append("sparse_dimensions")
+        if failed:
+            return {**details, "valid": False, "failed_checks": failed}
+        stream.seek(file_hdr_sz)
+        logical_blocks = 0
+        first_sb = None
+        raw_ranges = []
+        for index in range(total_chunks):
+            hdr = stream.read(chunk_hdr_sz)
+            if len(hdr) != chunk_hdr_sz:
+                failed.append("truncated_chunk_header")
+                break
+            chunk_type, reserved, blocks, chunk_total = struct.unpack("<2H2I", hdr[:12])
+            payload = chunk_total - chunk_hdr_sz
+            if chunk_total < chunk_hdr_sz or blocks > total_blks - logical_blocks:
+                failed.append("invalid_chunk_bounds")
+                break
+            if chunk_type == 0xCAC1:  # RAW
+                expected = blocks * block_sz
+            elif chunk_type == 0xCAC2:  # FILL
+                expected = 4
+            elif chunk_type == 0xCAC3:  # DONT_CARE
+                expected = 0
+            elif chunk_type == 0xCAC4:  # CRC32
+                expected = 4
+                if blocks != 0:
+                    failed.append("invalid_crc_chunk")
+            else:
+                failed.append("unknown_chunk_type")
+                break
+            if payload != expected or stream.tell() + payload > size:
+                failed.append("invalid_chunk_size")
+                break
+            if chunk_type == 0xCAC1 and blocks:
+                if logical_blocks == 0 and first_sb is None:
+                    first_sb = stream.read(96)
+                    if len(first_sb) != 96:
+                        failed.append("truncated_squashfs_superblock")
+                        break
+                    stream.seek(-96, 1)
+                raw_ranges.append((logical_blocks * block_sz, (logical_blocks + blocks) * block_sz))
+            stream.seek(payload, 1)
+            if chunk_type != 0xCAC4:
+                logical_blocks += blocks
+        if logical_blocks != total_blks:
+            failed.append("sparse_block_count")
+        if stream.tell() != size:
+            failed.append("sparse_trailing_or_truncated_data")
+        if first_sb is None:
+            failed.append("missing_raw_squashfs_superblock")
+            sb = _squashfs_metadata(b"", total_blks * block_sz)
+        else:
+            sb = _squashfs_metadata(first_sb, total_blks * block_sz)
+        if not sb["valid"]:
+            failed.extend("squashfs_" + check for check in sb["failed_checks"])
+        # Every filesystem byte must be backed by RAW data, not an unallocated hole.
+        used = sb.get("bytes_used", 0)
+        if used and used <= total_blks * block_sz:
+            covered = 0
+            for begin, end in raw_ranges:
+                if begin > covered:
+                    break
+                covered = max(covered, end)
+                if covered >= used:
+                    break
+            if covered < used:
+                failed.append("squashfs_unallocated_data")
+        details.update(squashfs_superblock=sb, failed_checks=failed, valid=not failed)
+        return details
+
+
 def squashfs_v4_superblock_valid(path):
-    """Retain the simple predicate for offline tests and callers."""
+    """Retain the predicate for offline tests and callers."""
     return squashfs_v4_superblock_details(path)["valid"]
 
 def check(source, log, root):
@@ -93,15 +185,15 @@ def check(source, log, root):
     # These remain on the ephemeral CI runner and are NEVER uploaded.
     images = []
     for suffix, magic in (("boot.img", b"ANDROID!"),
-                          ("system.img", bytes.fromhex("3aff26ed"))):
+                          ("system.img", None)):
         matches = [p for p in (root / "bin/targets").rglob("*jz08*" + suffix)
                    if p.is_file()]
         if len(matches) != 1:
             errors.append(f"expected exactly one JZ08 {suffix}, found {len(matches)}")
         for p in matches:
             with p.open("rb") as f:
-                header = f.read(len(magic))
-            valid = header == magic and p.stat().st_size > 4096
+                header = f.read(len(magic) if magic is not None else 4)
+            valid = (header == magic if magic is not None else True) and p.stat().st_size > 4096
             if not valid:
                 errors.append(f"JZ08 {suffix} is missing its expected image header")
             superblock = None
@@ -109,7 +201,7 @@ def check(source, log, root):
                 superblock = squashfs_v4_superblock_details(p)
                 if not superblock["valid"]:
                     errors.append(
-                        "JZ08 system.img has invalid or inconsistent SquashFS superblock "
+                        "JZ08 system.img has invalid or inconsistent SquashFS/sparse container "
                         "(failed checks: " + ", ".join(superblock["failed_checks"]) + ")"
                     )
                 valid = valid and superblock["valid"]
