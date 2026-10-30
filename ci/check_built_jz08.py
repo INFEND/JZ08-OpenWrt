@@ -16,6 +16,26 @@ MUST_HAVE = {
     "uhttpd", "configs-mifi"
 }
 
+def squashfs_v4_superblock_valid(path):
+    """Validate structural SquashFS metadata, not only its four magic bytes."""
+    with path.open("rb") as stream:
+        sb = stream.read(96)
+    if len(sb) != 96 or sb[:4] != bytes.fromhex("3aff26ed"):
+        return False
+    inode_count = int.from_bytes(sb[4:8], "little")
+    block_size = int.from_bytes(sb[12:16], "little")
+    major = int.from_bytes(sb[28:30], "little")
+    minor = int.from_bytes(sb[30:32], "little")
+    bytes_used = int.from_bytes(sb[40:48], "little")
+    return (
+        inode_count > 0
+        and 4096 <= block_size <= 1048576
+        and block_size & (block_size - 1) == 0
+        and (major, minor) == (4, 0)
+        and 4096 <= bytes_used <= path.stat().st_size
+    )
+
+
 def check(source, log, root):
     errors = []
     text = log.read_text(errors="replace")
@@ -66,6 +86,11 @@ def check(source, log, root):
             valid = header == magic and p.stat().st_size > 4096
             if not valid:
                 errors.append(f"JZ08 {suffix} is missing its expected image header")
+            if suffix == "system.img":
+                superblock_valid = squashfs_v4_superblock_valid(p)
+                if not superblock_valid:
+                    errors.append("JZ08 system.img has invalid or inconsistent SquashFS superblock")
+                valid = valid and superblock_valid
             images.append({
                 "path": p.relative_to(root).as_posix(),
                 "size": p.stat().st_size,
