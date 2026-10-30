@@ -1,0 +1,47 @@
+name: JZ08 safe backup auditor ZIP (NOT FIRMWARE)
+on:
+  push:
+    paths:
+      - tools/jz08_backup_audit.py
+      - ci/package_safe_tool.py
+      - tests/test_backup_audit.py
+      - .github/workflows/safe-preflight.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  safe-preflight:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run offline GPT and SHA256 tests
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 ci/validate.py
+      - name: Package executable ZIP and check self-contained CLI
+        run: |
+          python3 ci/package_safe_tool.py
+          python3 dist/JZ08_SAFE_BACKUP_AUDIT.zip --help
+          (cd dist && sha256sum -c JZ08_SAFE_BACKUP_AUDIT.sha256)
+      - name: Publish safe tool archive as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: JZ08-SAFE-BACKUP-AUDIT-NOT-FIRMWARE
+          path: |
+            dist/JZ08_SAFE_BACKUP_AUDIT.zip
+            dist/JZ08_SAFE_BACKUP_AUDIT.sha256
+            dist/JZ08_SAFE_TOOL_MANIFEST.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish stable prerelease download (tool only; never a firmware image)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view safe-preflight >/dev/null 2>&1 || \
+            gh release create safe-preflight --prerelease --title "JZ08 SAFE preflight tools (NOT FIRMWARE)" --notes "Read-only local backup SHA256/GPT audit. Does not flash or connect to MiFi. NOT OPENWRT FIRMWARE."
+          gh release upload safe-preflight \
+            dist/JZ08_SAFE_BACKUP_AUDIT.zip \
+            dist/JZ08_SAFE_BACKUP_AUDIT.sha256 \
+            dist/JZ08_SAFE_TOOL_MANIFEST.json --clobber
