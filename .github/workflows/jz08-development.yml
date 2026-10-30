@@ -5,6 +5,7 @@ on:
       - .github/workflows/jz08-development.yml
       - ci/build-jz08-development.sh
       - ci/prepare_jz08.py
+      - ci/check_built_jz08.py
       - board/msm8916-generic-jz08-prototype.dts
       - board/msm8916.mk.append
   workflow_dispatch:
@@ -33,5 +34,6 @@ jobs:
             jz08-development.log
             output/*.txt
             output/*.manifest
+            output/*.json
           if-no-files-found: warn
           retention-days: 14
