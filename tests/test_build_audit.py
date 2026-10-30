@@ -25,17 +25,17 @@ class BuiltImageAudit(unittest.TestCase):
         dtb = bytearray(1024)
         dtb[:4] = bytes.fromhex("d00dfeed")
         dtb[4:8] = (1024).to_bytes(4, "big")
-        compatible = b"xarkon,jz08-3000-nkv\\x00"
+        compatible = b"xarkon,jz08-3000-nkv\x00"
         dtb[64:64 + len(compatible)] = compatible
         (dtbdir / "image-msm8916-generic-jz08-3000-nkv.dtb").write_bytes(dtb)
         (self.targets / "openwrt-jz08.manifest").write_text(
-            "".join(f"{pkg} - 1.0\\n" for pkg in sorted(audit.MUST_HAVE))
+            "".join(f"{pkg} - 1.0\n" for pkg in sorted(audit.MUST_HAVE))
         )
         (self.root / ".config").write_text(
-            "CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y\\n"
+            "CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y\n"
         )
         self.log = self.root / "kconfig.log"
-        self.log.write_text("Kconfig passed\\n")
+        self.log.write_text("Kconfig passed\n")
         self.boot = self.targets / "openwrt-jz08-boot.img"
         self.system = self.targets / "openwrt-jz08-system.img"
         self.boot.write_bytes(b"ANDROID!" + bytes(4096))
@@ -73,7 +73,7 @@ class BuiltImageAudit(unittest.TestCase):
     def test_missing_essential_package_is_rejected(self):
         manifest = self.targets / "openwrt-jz08.manifest"
         manifest.write_text(
-            "".join(f"{pkg} - 1.0\\n" for pkg in sorted(audit.MUST_HAVE - {"rmtfs"}))
+            "".join(f"{pkg} - 1.0\n" for pkg in sorted(audit.MUST_HAVE - {"rmtfs"}))
         )
         report = self.run_audit()
         self.assertTrue(any("rmtfs" in e for e in report["errors"]))
