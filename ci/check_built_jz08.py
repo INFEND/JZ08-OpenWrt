@@ -47,7 +47,7 @@ def check(source, log, root):
         data = p.read_bytes()
         if (len(data) >= 1024 and data[:4] == bytes.fromhex("d00dfeed")
                 and int.from_bytes(data[4:8], "big") <= len(data)
-                and b"xarkon,jz08-3000-nkv\\x00" in data):
+                and b"xarkon,jz08-3000-nkv\x00" in data):
             verified_dtbs.append(p)
     if not verified_dtbs:
         errors.append("no compiled JZ08 DTB with valid FDT header and board compatible")
