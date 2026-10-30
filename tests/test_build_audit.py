@@ -41,7 +41,7 @@ class BuiltImageAudit(unittest.TestCase):
         self.boot.write_bytes(b"ANDROID!" + bytes(4096))
         # Minimal internally consistent SquashFS v4 superblock fixture.
         squashfs = bytearray(4096 + 96)
-        squashfs[:4] = bytes.fromhex("3aff26ed")
+        squashfs[:4] = b"hsqs"  # SquashFS LE, not Android sparse magic
         squashfs[4:8] = (1).to_bytes(4, "little")  # inode_count
         squashfs[12:16] = (131072).to_bytes(4, "little")  # block_size
         squashfs[28:30] = (4).to_bytes(2, "little")  # s_major
