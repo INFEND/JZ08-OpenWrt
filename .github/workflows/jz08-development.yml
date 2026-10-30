@@ -1,0 +1,37 @@
+name: JZ08 development kernel/OpenWrt build (NOT FLASHABLE)
+on:
+  push:
+    paths:
+      - .github/workflows/jz08-development.yml
+      - ci/build-jz08-development.sh
+      - ci/prepare_jz08.py
+      - board/msm8916-generic-jz08-prototype.dts
+      - board/msm8916.mk.append
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  jz08-development:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile JZ08 development profile with GPIO and flashing disabled
+        shell: bash
+        run: |
+          bash ci/build-jz08-development.sh > jz08-development.log 2>&1 || {
+            tail -n 200 jz08-development.log
+            exit 1
+          }
+          tail -n 80 jz08-development.log
+      - name: Upload logs and text manifests only, even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jz08-development-compile-logs-NOT-FLASHABLE
+          path: |
+            jz08-development.log
+            output/*.txt
+            output/*.manifest
+          if-no-files-found: warn
+          retention-days: 14
