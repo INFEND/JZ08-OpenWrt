@@ -72,8 +72,8 @@ required = ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager")
 lines = [f"CONFIG_PACKAGE_{name}=" for name in required]
 report = [next((x for x in config.splitlines() if x.startswith(prefix)),
                prefix + "<ABSENT>") for prefix in lines]
-pathlib.Path(sys.argv[2]).write_text("\\n".join(report) + "\\n")
-print("Required OpenWrt selections:", *report, sep="\\n")
+pathlib.Path(sys.argv[2]).write_text("\n".join(report) + "\n")
+print("Required OpenWrt selections:", *report, sep="\n")
 missing = [name for name, row in zip(required, report) if row != f"CONFIG_PACKAGE_{name}=y"]
 if missing:
     sys.exit("Kconfig rejected required JZ08 packages: " + ", ".join(missing))
