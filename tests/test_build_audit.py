@@ -113,6 +113,49 @@ class BuiltImageAudit(unittest.TestCase):
         self.assertEqual(record["squashfs_superblock"]["minor"], 0)
         self.assertEqual(record["squashfs_superblock"]["failed_checks"], [])
 
+    def _make_sparse_system(self, *, truncate=False, corrupt_chunk=False, hole=False):
+        import struct
+        raw = self.system.read_bytes()
+        block_size = 4096
+        padded = raw + bytes((-len(raw)) % block_size)
+        blocks = len(padded) // block_size
+        chunks = 2 if hole else 1
+        header = struct.pack("<I4H4I", 0xED26FF3A, 1, 0, 28, 12,
+                             block_size, blocks + int(hole), chunks, 0)
+        chunk = struct.pack("<2H2I", 0xCAC1, 0, blocks,
+                            12 + len(padded) + int(corrupt_chunk))
+        content = header + chunk + padded
+        if hole:
+            content += struct.pack("<2H2I", 0xCAC3, 0, 1, 12)
+        if truncate:
+            content = content[:-1]
+        self.system.write_bytes(content)
+
+    def test_android_sparse_squashfs_is_validated(self):
+        self._make_sparse_system()
+        audit.check(ROOT, self.log, self.root)
+        report = json.loads((ROOT / "output/JZ08_BUILD_AUDIT.json").read_text())
+        system = next(x for x in report["build_images"] if x["path"].endswith("system.img"))
+        self.assertTrue(system["header_verified"])
+        self.assertEqual(system["squashfs_superblock"]["container"], "android_sparse")
+        self.assertEqual(system["squashfs_superblock"]["squashfs_superblock"]["major"], 4)
+
+    def test_truncated_android_sparse_image_is_rejected(self):
+        self._make_sparse_system(truncate=True)
+        report = self.run_audit()
+        system = next(x for x in report["build_images"] if x["path"].endswith("system.img"))
+        self.assertIn("invalid_chunk_size", system["squashfs_superblock"]["failed_checks"])
+
+    def test_bad_android_sparse_chunk_length_is_rejected(self):
+        self._make_sparse_system(corrupt_chunk=True)
+        report = self.run_audit()
+        system = next(x for x in report["build_images"] if x["path"].endswith("system.img"))
+        self.assertIn("invalid_chunk_size", system["squashfs_superblock"]["failed_checks"])
+
+    def test_sparse_hole_after_filesystem_is_allowed(self):
+        self._make_sparse_system(hole=True)
+        audit.check(ROOT, self.log, self.root)
+
     def test_missing_essential_package_is_rejected(self):
         manifest = self.targets / "openwrt-jz08.manifest"
         manifest.write_text(
