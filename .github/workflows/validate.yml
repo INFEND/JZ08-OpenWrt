@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Check build scripts for Bash syntax errors
+        run: bash -n ci/build-jz08-development.sh
       - name: Offline source and GPT identity checks
         run: python3 ci/validate.py
       - name: Unit tests
