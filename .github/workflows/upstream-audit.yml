@@ -1,0 +1,21 @@
+name: JZ08 pinned upstream source audit
+on:
+  push:
+    paths:
+      - ci/audit_upstream.py
+      - .github/workflows/upstream-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect pinned source without executing its scripts
+        run: python3 ci/audit_upstream.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-reference-source-hashes
+          path: upstream-audit.json

@@ -1,0 +1,35 @@
+name: MSM8916 reference compilation (NOT JZ08 firmware)
+on:
+  push:
+    paths:
+      - ci/build-reference.sh
+      - .github/workflows/reference-build.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile pinned MF68E reference without publishing dangerous flash files
+        shell: bash
+        run: |
+          chmod +x ci/build-reference.sh
+          bash ci/build-reference.sh > reference-build.log 2>&1 || {
+            tail -n 250 reference-build.log
+            exit 1
+          }
+          tail -n 80 reference-build.log
+      - name: Upload diagnostic log and text manifests only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jz08-reference-build-logs-NOT-FLASHABLE
+          path: |
+            reference-build.log
+            output/*.txt
+            output/*.manifest
+          if-no-files-found: warn
+          retention-days: 14
