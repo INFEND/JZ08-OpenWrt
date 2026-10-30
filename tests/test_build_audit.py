@@ -91,6 +91,28 @@ class BuiltImageAudit(unittest.TestCase):
         report = self.run_audit()
         self.assertTrue(any("system.img" in e and "superblock" in e for e in report["errors"]))
 
+    def test_squashfs_failure_reports_exact_metadata_without_weakening_gate(self):
+        image = bytearray(self.system.read_bytes())
+        image[40:48] = (1000000).to_bytes(8, "little")
+        self.system.write_bytes(image)
+        report = self.run_audit()
+        self.assertTrue(any("bytes_used_range" in error for error in report["errors"]))
+        record = next(x for x in report["build_images"] if x["path"].endswith("system.img"))
+        self.assertFalse(record["header_verified"])
+        self.assertEqual(record["squashfs_superblock"]["bytes_used"], 1000000)
+        self.assertEqual(record["squashfs_superblock"]["file_size"], len(image))
+        self.assertEqual(record["squashfs_superblock"]["failed_checks"], ["bytes_used_range"])
+        self.assertFalse(record["published"])
+
+    def test_valid_squashfs_reports_structural_fields(self):
+        audit.check(ROOT, self.log, self.root)
+        report = json.loads((ROOT / "output/JZ08_BUILD_AUDIT.json").read_text())
+        record = next(x for x in report["build_images"] if x["path"].endswith("system.img"))
+        self.assertTrue(record["squashfs_superblock"]["valid"])
+        self.assertEqual(record["squashfs_superblock"]["major"], 4)
+        self.assertEqual(record["squashfs_superblock"]["minor"], 0)
+        self.assertEqual(record["squashfs_superblock"]["failed_checks"], [])
+
     def test_missing_essential_package_is_rejected(self):
         manifest = self.targets / "openwrt-jz08.manifest"
         manifest.write_text(
