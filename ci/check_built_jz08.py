@@ -201,7 +201,7 @@ def check(source, log, root):
                 superblock = squashfs_v4_superblock_details(p)
                 if not superblock["valid"]:
                     errors.append(
-                        "JZ08 system.img has invalid or inconsistent SquashFS/sparse container "
+                        "JZ08 system.img has invalid or inconsistent SquashFS superblock/sparse container "
                         "(failed checks: " + ", ".join(superblock["failed_checks"]) + ")"
                     )
                 valid = valid and superblock["valid"]
