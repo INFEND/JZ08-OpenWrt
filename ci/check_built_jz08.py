@@ -16,25 +16,43 @@ MUST_HAVE = {
     "uhttpd", "configs-mifi"
 }
 
-def squashfs_v4_superblock_valid(path):
-    """Validate structural SquashFS metadata, not only its four magic bytes."""
+def squashfs_v4_superblock_details(path):
+    """Report safe SquashFS metadata and every failed structural check.
+
+    This does not certify filesystem contents or device compatibility.
+    """
+    size = path.stat().st_size
     with path.open("rb") as stream:
         sb = stream.read(96)
-    if len(sb) != 96 or sb[:4] != bytes.fromhex("3aff26ed"):
-        return False
-    inode_count = int.from_bytes(sb[4:8], "little")
-    block_size = int.from_bytes(sb[12:16], "little")
-    major = int.from_bytes(sb[28:30], "little")
-    minor = int.from_bytes(sb[30:32], "little")
-    bytes_used = int.from_bytes(sb[40:48], "little")
-    return (
-        inode_count > 0
-        and 4096 <= block_size <= 1048576
-        and block_size & (block_size - 1) == 0
-        and (major, minor) == (4, 0)
-        and 4096 <= bytes_used <= path.stat().st_size
-    )
+    details = {"file_size": size, "superblock_size": len(sb)}
+    if len(sb) != 96:
+        details.update(valid=False, failed_checks=["superblock_length"])
+        return details
+    details.update({
+        "magic": sb[:4].hex(),
+        "inode_count": int.from_bytes(sb[4:8], "little"),
+        "block_size": int.from_bytes(sb[12:16], "little"),
+        "major": int.from_bytes(sb[28:30], "little"),
+        "minor": int.from_bytes(sb[30:32], "little"),
+        "bytes_used": int.from_bytes(sb[40:48], "little"),
+    })
+    block_size = details["block_size"]
+    checks = {
+        "magic": details["magic"] == "3aff26ed",
+        "inodes": details["inode_count"] > 0,
+        "block_size_range": 4096 <= block_size <= 1048576,
+        "block_size_power_of_two": block_size > 0 and (block_size & (block_size - 1)) == 0,
+        "squashfs_v4": (details["major"], details["minor"]) == (4, 0),
+        "bytes_used_range": 4096 <= details["bytes_used"] <= size,
+    }
+    details["failed_checks"] = [name for name, passed in checks.items() if not passed]
+    details["valid"] = not details["failed_checks"]
+    return details
 
+
+def squashfs_v4_superblock_valid(path):
+    """Retain the simple predicate for offline tests and callers."""
+    return squashfs_v4_superblock_details(path)["valid"]
 
 def check(source, log, root):
     errors = []
@@ -86,18 +104,25 @@ def check(source, log, root):
             valid = header == magic and p.stat().st_size > 4096
             if not valid:
                 errors.append(f"JZ08 {suffix} is missing its expected image header")
+            superblock = None
             if suffix == "system.img":
-                superblock_valid = squashfs_v4_superblock_valid(p)
-                if not superblock_valid:
-                    errors.append("JZ08 system.img has invalid or inconsistent SquashFS superblock")
-                valid = valid and superblock_valid
-            images.append({
+                superblock = squashfs_v4_superblock_details(p)
+                if not superblock["valid"]:
+                    errors.append(
+                        "JZ08 system.img has invalid or inconsistent SquashFS superblock "
+                        "(failed checks: " + ", ".join(superblock["failed_checks"]) + ")"
+                    )
+                valid = valid and superblock["valid"]
+            image_record = {
                 "path": p.relative_to(root).as_posix(),
                 "size": p.stat().st_size,
                 "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
                 "header_verified": valid,
                 "published": False,
-            })
+            }
+            if superblock is not None:
+                image_record["squashfs_superblock"] = superblock
+            images.append(image_record)
     if "DEVICE_DTS := msm8916-generic-jz08-3000-nkv" not in (
             source / "board/msm8916.mk.append").read_text():
         errors.append("JZ08 image profile does not select the JZ08 DTB")
