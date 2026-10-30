@@ -45,3 +45,16 @@
 Для запуска проверок: `python3 -m unittest discover -s tests -v`.
 
 **Важно:** открытые исходники LCD v29 частично перенесены в [drivers/lcd](drivers/lcd) и проверяются статическими тестами. Полный ZIP `XARKON_JZ08_GPT_ASTRA_HANDOFF_20261030.zip`, экспериментальные бинарники, заводской дамп и конфиденциальные отчёты **не опубликованы** здесь. Компиляция upstream не доказывает работоспособность прошивки JZ08. Текущий процесс сборки: [GitHub Actions](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions); незавершённые задачи: [Issues](https://github.com/ANTIFERMENT/JZ08-OpenWrt/issues).
+
+## Автоматически опубликованный инструмент S24 Ultra
+
+Для проверки имеющегося заводского дампа без EDL и без перепрошивки:
+**[JZ08_SAFE_BACKUP_AUDIT.zip](https://github.com/ANTIFERMENT/JZ08-OpenWrt/releases/download/safe-preflight/JZ08_SAFE_BACKUP_AUDIT.zip)**.
+Это исполняемый Python ZIP для Termux, опубликованный автоматической
+[GitHub Actions проверкой](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/workflows/safe-preflight.yml).
+Он валидирует обе GPT, 27 OEM-разделов, размер, защиту p14 и полный SHA-256,
+затем сохраняет один ZIP-отчёт в Download. **Он не пишет в роутер.**
+[Команды запуска на S24](docs/S24_INSTALL.md).
+
+Текущие проверенные аппаратные факты и недоказанные этапы:
+[Журнал доказательств 30.10.2026](docs/EVIDENCE_20261030.md).
