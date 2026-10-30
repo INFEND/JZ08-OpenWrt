@@ -46,12 +46,19 @@ def run(upstream: pathlib.Path, openwrt: pathlib.Path):
     old = (upstream / "diffconfig_mf68e").read_text()
     old = old.replace("CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-mf68e=y",
                       "CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y")
+    # Explicitly select the router UI and modem packages in addition to the
+    # image profile's DEVICE_PACKAGES. Do not silently inherit an incomplete
+    # MF68E selection. make defconfig may still reject unmet dependencies:
+    # the CI build must detect and report that, never claim a valid image.
+    required = ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager")
+    removed = ("CONFIG_PACKAGE_router-display=",
+               "CONFIG_PACKAGE_kmod-fbtft-gc9107=")
+    overrides = tuple(f"CONFIG_PACKAGE_{name}=" for name in required)
     filtered = [
         line for line in old.splitlines()
-        if not line.startswith(("CONFIG_PACKAGE_router-display=",
-                                "CONFIG_PACKAGE_kmod-fbtft-gc9107="))
+        if not line.startswith(removed + overrides)
     ]
-    filtered.append("CONFIG_PACKAGE_luci-i18n-base-ru=y")
+    filtered.extend(f"CONFIG_PACKAGE_{name}=y" for name in required)
     (openwrt / ".config").write_text("\n".join(filtered) + "\n")
     print("JZ08 DEVELOPMENT PROFILE ADDED: NO GPIO ENABLED / NO OEM GPT / NO FLASHING")
     print("Linux patch:",patch)
