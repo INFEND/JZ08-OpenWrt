@@ -29,14 +29,14 @@ class DevelopmentProfile(unittest.TestCase):
             (target / "image").mkdir()
             up.mkdir()
             (target / "patches-6.12/801-arm64-dts-qcom-add-devices-makefile.patch").write_text(
-                "existing pinned source patch\\n")
+                "existing pinned source patch\n")
             (target / "image/msm8916.mk").write_text(
-                "ifeq ($(SUBTARGET),msm8916)\\nendif\\n")
+                "ifeq ($(SUBTARGET),msm8916)\nendif\n")
             (up / "diffconfig_mf68e").write_text(
-                "CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-mf68e=y\\n"
-                "CONFIG_PACKAGE_luci=y\\nCONFIG_PACKAGE_modemmanager=y\\n"
-                "CONFIG_PACKAGE_router-display=y\\n"
-                "CONFIG_PACKAGE_kmod-fbtft-gc9107=y\\n")
+                "CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-mf68e=y\n"
+                "CONFIG_PACKAGE_luci=y\nCONFIG_PACKAGE_modemmanager=y\n"
+                "CONFIG_PACKAGE_router-display=y\n"
+                "CONFIG_PACKAGE_kmod-fbtft-gc9107=y\n")
             prepare.run(up, ow)
             config = (ow / ".config").read_text()
             for pkg in ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager"):
