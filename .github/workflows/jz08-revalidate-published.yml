@@ -61,6 +61,7 @@ jobs:
           import json
           result = json.load(open("JZ08_INDEPENDENT_DEEP_AUDIT.json"))
           assert result["real_payloads_inspected"] is True
+          assert result["kernel_appended_jz08_dtb_verified"] is True
           assert result["rootfs_contents_rechecked"] is True
           assert result["flash_allowed"] is False
           assert result["hardware_tested"] is False
