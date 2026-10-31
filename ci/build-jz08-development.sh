@@ -76,6 +76,36 @@ PY
 make download -j4
 make -j2 || make -j1 V=s
 python3 "$ROOT/ci/check_built_jz08.py" --source "$ROOT" --build-log "$ROOT/output/JZ08_KCONFIG.log.txt" --openwrt "$OW"
+# Verify actual rootfs contents, not merely the sparse/SquashFS superblock.
+# The decoded image exists ONLY on the temporary CI runner and is deleted.
+# Do not upload this image, or publish any firmware binary.
+echo "Verifying every file in the built JZ08 SquashFS (offline, no flashing)"
+ROOTFS_IMAGE="$(find "$OW/bin/targets/msm89xx/msm8916" -maxdepth 1 -type f -name '*jz08*system.img' -print -quit)"
+test -n "$ROOTFS_IMAGE" && test -f "$ROOTFS_IMAGE" || {
+  echo "FATAL: built JZ08 rootfs image missing for content verification" >&2
+  exit 1
+}
+command -v simg2img >/dev/null || {
+  echo "FATAL: simg2img unavailable; cannot verify real rootfs contents" >&2
+  exit 1
+}
+sudo apt-get update -qq
+sudo apt-get install -y -qq --no-install-recommends squashfs-tools
+ROOTFS_RAW="$(mktemp /tmp/jz08-rootfs-audit.XXXXXXXX.raw)"
+trap 'rm -f "$ROOTFS_RAW"' EXIT
+simg2img "$ROOTFS_IMAGE" "$ROOTFS_RAW"
+if ! unsquashfs -test "$ROOTFS_RAW" > "$ROOT/output/JZ08_ROOTFS_CONTENTS_TEST.txt" 2>&1; then
+  echo "FATAL: real JZ08 SquashFS content decompression failed" >&2
+  tail -n 100 "$ROOT/output/JZ08_ROOTFS_CONTENTS_TEST.txt" >&2
+  exit 1
+fi
+printf 'PASS: real JZ08 Android Sparse decoded and SquashFS files decompressed\nsource_sha256=%s\nexpanded_bytes=%s\nflash_allowed=false\n' \
+  "$(sha256sum "$ROOTFS_IMAGE" | cut -d' ' -f1)" \
+  "$(stat -c '%s' "$ROOTFS_RAW")" \
+  > "$ROOT/output/JZ08_ROOTFS_CONTENTS_STATUS.txt"
+cat "$ROOT/output/JZ08_ROOTFS_CONTENTS_STATUS.txt"
+rm -f "$ROOTFS_RAW"
+trap - EXIT
 printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
 # Keep diagnostic manifests only; images are excluded on purpose.
 find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
