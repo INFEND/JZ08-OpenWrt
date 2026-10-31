@@ -130,6 +130,20 @@ trap - EXIT
 printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
 # Keep diagnostic manifests only; images are excluded on purpose.
 find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
+# Prepare a separate RAM-only candidate with embedded initramfs and no eMMC root.
+# The Android header is unverified on real JZ08/LK2ND; NEVER write this image.
+INITRAMFS_KERNEL="$(find "$OW/bin/targets/msm89xx/msm8916" -maxdepth 1 -type f -name '*jz08*initramfs-kernel.bin' -print -quit)"
+test -n "$INITRAMFS_KERNEL" && test -s "$INITRAMFS_KERNEL" || {
+  echo "FATAL: JZ08 initramfs kernel is missing" >&2
+  exit 1
+}
+command -v mkbootimg >/dev/null || {
+  echo "FATAL: mkbootimg unavailable for RAM-only candidate" >&2
+  exit 1
+}
+mkbootimg --kernel "$INITRAMFS_KERNEL" --ramdisk /dev/null \
+  --cmdline "earlycon console=ttyMSM0,115200 rdinit=/init" --pagesize 2048 \
+  -o "$ROOT/output/JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img"
 # Assemble all verified binaries into one engineering-only archive; no flash scripts.
 # Failure to verify any mandatory member fails the entire build.
 python3 "$ROOT/ci/package_jz08_experiment.py" --source "$ROOT" --openwrt "$OW"
