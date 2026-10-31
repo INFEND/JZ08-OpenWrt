@@ -50,3 +50,20 @@
 5. В этой работе **не выполнялись** EDL/fastboot запись, операции с eMMC, публикация бинарных образов или загрузка OEM/NV/IMEI.
 
 **Решение:** офлайн-этап компиляции и проверки содержимого rootfs пройден; аппаратная готовность **НЕ подтверждена**. Продолжать безопасную подготовку без промежуточных испытаний и сохранять `NOT FLASHABLE`.
+
+## Дополнение: проверка реальных ELF-файлов rootfs (31.10.2026, 09:50 UTC)
+
+Новая полная сборка [#41185758066](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/runs/41185758066) завершилась **success** на коммите `97cf0d693a6747e50aa879a50622c5fc413f378f`. Диагностический ZIP [#13038851037](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/runs/41185758066/artifacts/13038851037) фактически скачан и проверен: 9 файлов, ZIP CRC OK, SHA-256 ZIP `776db577725351d4e5d9ee4529d3034d34b76dbb3e994ba8dd126f3d251193f4`. В архиве нет бинарных образов.
+
+- JZ08 DTB: **49 249 байт**, SHA-256 `c0d9137d0c31b10ea3a9544b1d62e2fb6cd777becad29de0ada43c241332b030`.
+- `boot.img`: **6 324 499 байт**, SHA-256 `f8764a1b2a78e9a179293662cc44cdb3cc7d60d365dbc67bfaf2804fdad8d6cc`, `ramdisk_size=0`.
+- `system.img`: **9 494 568 байт**, SHA-256 `2e2d476ae6fd557e8b1e8990732e55e4e9e709309eb3946f2dff2c3201e7cd4b`. Android Sparse и SquashFS проверены, все **1586 inode** распакованы.
+- `/sbin/init`: ELF64 AArch64, **65 801 байт**, SHA-256 `09f5ddc2e223a3e3f0545d44851905da58c77d8823236247316b3097fef985f3`.
+- `/bin/busybox`: ELF64 AArch64, **458 773 байта**, SHA-256 `9920c5818cc7782377738330d36ee638d1d6fa2e6d8e9ff141851c6867ccf0a0`.
+- Оба ELF имеют по два `PT_LOAD`, используют `/lib/ld-musl-aarch64.so.1`; наличие интерпретатора внутри извлечённого rootfs проверено. JSON: `status=OFFLINE_USERSPACE_CHECK_PASS_ONLY`, `errors=[]`, `rootfs_executed=false`, `flash_allowed=false`.
+
+**Уточнение проверки русской локализации.** В отчёте новой сборки путь `/www/luci-static/resources/i18n/base.ru.lmo` отсутствует, но это **не доказательство отсутствия русской локализации**: закреплённый LuCI `luci.mk` устанавливает `base.ru.lmo` по адресу `/usr/lib/lua/luci/i18n/base.ru.lmo`. Добавлен отдельный обязательный офлайн-контроль фактического файла, его ненулевого размера и SHA-256 (коммиты `5392a3db`, `b0511b52`). Source checks [#41193160197](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/runs/41193160197) успешны; **результат проверки каталога в новом реальном rootfs ещё ожидается** в [#41193151847](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/runs/41193151847). До этого наличие русской локализации подтверждено манифестом пакетов, но не отдельным хешем каталога.
+
+Независимый pinned upstream audit [#41185758053](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/runs/41185758053) завершён успешно. Предыдущий параллельный development-run [#41185741728](https://github.com/ANTIFERMENT/JZ08-OpenWrt/actions/runs/41185741728) завершился ошибкой оболочки `command not found` на устаревшем коммите `f43cdd83`; дефект переноса строк исправлен последующим `97cf0d69` и повторная полная сборка успешна. Этот старый отказ не следует принимать за дефект rootfs.
+
+**Итог: NOT FLASHABLE, NOT READY FOR HARDWARE RAM-ONLY TEST.** Не подтверждены безопасные адреса RAM/загрузчика, независимый RAM-only initramfs, исполнение `/init` на плате, LCD/GPIO/LTE/Wi-Fi и стратегия восстановления. Ни одна проверка не разрешает запись eMMC.
