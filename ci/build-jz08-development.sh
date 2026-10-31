@@ -55,6 +55,10 @@ if grep -Eiq 'error: recursive dependency detected|error: symbol .* depends on' 
   exit 1
 fi
 cp "$WORK/jz08-kconfig.log" "$ROOT/output/JZ08_KCONFIG.log.txt"
+grep -Fxq 'CONFIG_TARGET_ROOTFS_INITRAMFS=y' "$OW/.config" || {
+  echo "FATAL: embedded initramfs for RAM-only test was deselected" >&2
+  exit 1
+}
 grep -Fxq 'CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y' "$OW/.config" || {
   echo "FATAL: JZ08 target was deselected by Kconfig" >&2
   exit 1
