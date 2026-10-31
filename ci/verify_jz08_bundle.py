@@ -115,6 +115,38 @@ def require_embedded_initramfs(kernel_path, cpio_path):
             "kernel_uncompressed_bytes": len(decoded)}
 
 
+def require_ram_only_cmdline(candidate_path):
+    """Inspect BOTH Android boot v0 cmdline fields, not just the first 512 bytes.
+
+    Legacy boot headers have cmdline[512] at offset 64 and
+    extra_cmdline[1024] at offset 608. A hidden root= in the latter must
+    never pass the RAM-only safety gate. This is an offline image check,
+    not a validation of addresses or bootloader behavior.
+    """
+    with candidate_path.open("rb") as stream:
+        header = stream.read(1632)
+    require(len(header) == 1632 and header[:8] == b"ANDROID!",
+            "RAM-only candidate lacks complete Android boot v0 header")
+    tokens = []
+    for start, end in ((64, 576), (608, 1632)):
+        field = header[start:end]
+        value, _, padding = field.partition(b"\x00")
+        require(not padding or not padding.strip(b"\x00"),
+                "RAM-only cmdline contains nonzero bytes after NUL")
+        try:
+            tokens.extend(value.decode("ascii").split())
+        except UnicodeDecodeError as exc:
+            raise ValueError(
+                "JZ08 ZIP VERIFICATION FAILED: non-ASCII RAM-only cmdline") from exc
+    require(tokens.count("rdinit=/init") == 1,
+            "RAM-only candidate requires exactly one rdinit=/init token")
+    require(not any(token.startswith(("root=", "init=")) or
+                    (token.startswith("rdinit=") and token != "rdinit=/init")
+                    for token in tokens),
+            "RAM-only candidate contains unsafe root/init argument")
+    return tokens
+
+
 def require_matching_rootfs_audit(actual, claimed):
     """Fail closed if the downloaded rootfs disagrees with its build report."""
     require(actual.get("status") == "OFFLINE_USERSPACE_CHECK_PASS_ONLY"
@@ -220,11 +252,14 @@ def verify_real_payloads(zf):
                 "RAM-only embedded kernel length mismatch")
         require(initramfs_kernel.open("rb").read(2) == bytes.fromhex("1f8b"),
                 "RAM-only embedded kernel is not gzip")
+        require(ram_header["second_size"] == 0,
+                "RAM-only candidate unexpectedly carries second-stage payload")
         with candidate.open("rb") as stream:
-            stream.seek(64)
-            cmdline = stream.read(512).split(bytes([0]), 1)[0]
-        require(b"rdinit=/init" in cmdline and b"root=" not in cmdline,
-                "RAM-only candidate contains unsafe or missing boot arguments")
+            stream.seek(40)
+            dt_size = int.from_bytes(stream.read(4), "little")
+        require(dt_size == 0,
+                "RAM-only candidate unexpectedly carries a separate DT payload")
+        require_ram_only_cmdline(candidate)
 
         def boot_kernel_sha(path, header):
             digest = hashlib.sha256()
