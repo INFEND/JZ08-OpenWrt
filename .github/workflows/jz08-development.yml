@@ -7,6 +7,7 @@ on:
       - ci/prepare_jz08.py
       - ci/check_built_jz08.py
       - ci/audit_rootfs_runtime.py
+      - ci/package_jz08_experiment.py
       - board/msm8916-generic-jz08-prototype.dts
       - board/msm8916.mk.append
   workflow_dispatch:
@@ -37,4 +38,15 @@ jobs:
             output/*.manifest
             output/*.json
           if-no-files-found: warn
+          retention-days: 14
+      - name: Upload unified verified engineering bundle (NOT FLASHABLE)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE
+          path: |
+            output/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip
+            output/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip.sha256
+            output/JZ08_BUNDLE_VERIFICATION.json
+          if-no-files-found: error
           retention-days: 14
