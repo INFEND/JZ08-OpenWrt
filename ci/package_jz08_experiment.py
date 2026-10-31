@@ -33,7 +33,7 @@ root=PARTLABEL=jz08-unconfigured-rootfs, такого проверенного r
 на заводской GPT нет. boot.img имеет пустой ramdisk. Поэтому этот набор
 НЕ является самодостаточной RAM-only загрузкой OpenWrt.
 
-Не выполнять fastboot flash, EDL write, rawprogram, замену GPT или
+Не выполнять команды записи через Fastboot, EDL, rawprogram, замену GPT или
 запись в eMMC. p14 на JZ08 = modemst2 (модемные данные), а не rootfs.
 Не применять чужие скрипты generic-mf68e.
 
