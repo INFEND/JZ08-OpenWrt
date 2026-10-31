@@ -1,0 +1,66 @@
+name: JZ08 re-audit latest published engineering ZIP (NOT FLASHABLE)
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/jz08-revalidate-published.yml
+      - ci/verify_jz08_bundle.py
+      - ci/audit_initramfs_cpio.py
+      - ci/check_built_jz08.py
+      - tests/test_bundle_verifier.py
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+jobs:
+  independently-revalidate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find latest successful full JZ08 producer on main
+        id: producer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          run_id="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/jz08-development.yml/runs?branch=main&status=success&per_page=30" --jq '.workflow_runs[0].id // empty')"
+          if ! [[ "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "FATAL: no successful full JZ08 build on main" >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Auditing actual published ZIP from producer run $run_id"
+      - name: Download exactly the latest published engineering ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE
+          path: verified-download
+          run-id: ${{ steps.producer.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Independently audit actual images, initramfs, packages and checksums
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ci/verify_jz08_bundle.py \
+            --archive verified-download/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip \
+            --sha256 verified-download/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip.sha256 \
+            --verification verified-download/JZ08_BUNDLE_VERIFICATION.json \
+            | tee JZ08_INDEPENDENT_DEEP_AUDIT.json
+          python3 - <<'PY'
+          import json
+          result = json.load(open("JZ08_INDEPENDENT_DEEP_AUDIT.json"))
+          assert result["real_payloads_inspected"] is True
+          assert result["flash_allowed"] is False
+          assert result["hardware_tested"] is False
+          PY
+      - name: Publish independent content audit (no firmware images)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JZ08_INDEPENDENT_DEEP_AUDIT_NOT_FLASHABLE
+          path: JZ08_INDEPENDENT_DEEP_AUDIT.json
+          if-no-files-found: error
+          retention-days: 14
