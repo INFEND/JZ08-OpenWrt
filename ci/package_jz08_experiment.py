@@ -14,6 +14,7 @@ import zipfile
 
 from check_built_jz08 import android_boot_v0_header_details, squashfs_v4_superblock_details
 from locate_initramfs_cpio import locate
+from verify_jz08_bundle import require_ram_only_cmdline
 
 BOARD = "JZ08-3000-NKV 1.0"
 BUNDLE_NAME = "JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip"
@@ -150,11 +151,16 @@ def assemble(source, openwrt):
     required(candidate_header["valid"] and candidate_header["ramdisk_size"] == 0
              and candidate_header["kernel_size"] == initramfs.stat().st_size,
              "RAM-only Android boot candidate invalid")
+    # Reuse the downloaded-ZIP auditor's complete Android boot v0 safety gate.
+    # Reject unsafe tokens in either cmdline field before publishing an archive.
+    require_ram_only_cmdline(candidate)
+    required(candidate_header["second_size"] == 0,
+             "RAM-only candidate unexpectedly carries second-stage payload")
     with candidate.open("rb") as stream:
-        stream.seek(64)
-        cmdline = stream.read(512).split(b"\x00", 1)[0]
-    required(b"rdinit=/init" in cmdline and b"root=" not in cmdline,
-             "RAM-only candidate has unsafe rootfs command line")
+        stream.seek(40)
+        dt_size = int.from_bytes(stream.read(4), "little")
+    required(dt_size == 0,
+             "RAM-only candidate unexpectedly carries separate DT payload")
     files["images/RAM_ONLY_INITRAMFS_CANDIDATE.img"] = candidate
 
     manifests = list((openwrt / "bin/targets/msm89xx/msm8916").glob("*jz08*.manifest"))
