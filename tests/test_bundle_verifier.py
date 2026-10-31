@@ -11,7 +11,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ci"))
 from verify_jz08_bundle import (REQUIRED, verify, require_matching_rootfs_audit,
-                                require_kernel_appended_dtb)
+                                require_kernel_appended_dtb, require_embedded_initramfs)
 
 
 class IndependentBundleVerificationTests(unittest.TestCase):
@@ -91,6 +91,36 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         kernel.write_bytes(gzip.compress(b"K" * 8192)[:-8] + board_dtb)
         with self.assertRaises(ValueError):
             require_kernel_appended_dtb(kernel, board_dtb)
+
+    def test_ram_only_kernel_contains_exact_published_cpio(self):
+        kernel = Path(self.tmp.name) / "ram-kernel.bin"
+        cpio_path = Path(self.tmp.name) / "initrd.cpio"
+        cpio = b"070701" + b"0" * 104 + b"JZ08_INITRAMFS_TEST" * 50
+        cpio_path.write_bytes(cpio)
+        kernel.write_bytes(gzip.compress(b"K" * 8192 + cpio + b"Z" * 256)
+                           + bytes.fromhex("d00dfeed") + b"BOARD")
+        proof = require_embedded_initramfs(kernel, cpio_path)
+        self.assertEqual(proof["embedded_cpio_sha256"],
+                         hashlib.sha256(cpio).hexdigest())
+        self.assertEqual(proof["embedded_cpio_bytes"], len(cpio))
+
+    def test_ram_only_kernel_rejects_standalone_unembedded_cpio(self):
+        kernel = Path(self.tmp.name) / "ram-kernel.bin"
+        cpio_path = Path(self.tmp.name) / "initrd.cpio"
+        cpio = b"070701" + b"0" * 104 + b"JZ08_INITRAMFS_TEST" * 50
+        cpio_path.write_bytes(cpio)
+        kernel.write_bytes(gzip.compress(b"K" * 8192 + b"WRONG_CPIO")
+                           + bytes.fromhex("d00dfeed") + b"BOARD")
+        with self.assertRaisesRegex(ValueError, "not byte-identically embedded"):
+            require_embedded_initramfs(kernel, cpio_path)
+
+    def test_ram_only_kernel_rejects_truncated_gzip(self):
+        kernel = Path(self.tmp.name) / "ram-kernel.bin"
+        cpio_path = Path(self.tmp.name) / "initrd.cpio"
+        cpio_path.write_bytes(b"070701" + b"0" * 104)
+        kernel.write_bytes(gzip.compress(b"K" * 8192)[:-8])
+        with self.assertRaisesRegex(ValueError, "incomplete"):
+            require_embedded_initramfs(kernel, cpio_path)
 
     def test_valid_complete_archive(self):
         result = verify(self.archive, self.sha, self.report, inspect_payloads=False)
