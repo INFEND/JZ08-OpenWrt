@@ -154,6 +154,36 @@ class EngineeringBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "rootfs service missing"):
             bundle.assemble(self.source, self.openwrt)
 
+    def test_packager_rejects_hidden_and_conflicting_ram_cmdline(self):
+        candidate = self.output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img"
+        original = candidate.read_bytes()
+        for offset, value in (
+            (608, b"root=/dev/mmcblk0p14"),
+            (608, b"init=/bin/sh"),
+            (608, b"rdinit=/init"),
+            (64, b"foo=rdinit=/init"),
+            (64, b"rdinit=/init\\x00root=/dev/mmcblk0p14".replace(b"\\x00", b"\\x00")),
+        ):
+            with self.subTest(offset=offset, value=value):
+                data = bytearray(original)
+                data[offset:offset + len(value)] = value
+                candidate.write_bytes(data)
+                with self.assertRaises(ValueError):
+                    bundle.assemble(self.source, self.openwrt)
+        candidate.write_bytes(original)
+
+    def test_packager_rejects_second_stage_and_separate_dt_payloads(self):
+        candidate = self.output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img"
+        original = candidate.read_bytes()
+        for offset in (24, 40):
+            with self.subTest(header_offset=offset):
+                data = bytearray(original)
+                data[offset:offset + 4] = (1024).to_bytes(4, "little")
+                candidate.write_bytes(data)
+                with self.assertRaises(ValueError):
+                    bundle.assemble(self.source, self.openwrt)
+        candidate.write_bytes(original)
+
     def test_changed_root_partition_assumption_rejected(self):
         (self.source / "board/msm8916.mk.append").write_text("CMDLINE := root=/dev/mmcblk0p14\n")
         with self.assertRaisesRegex(ValueError, "rootfs partition changed"):
