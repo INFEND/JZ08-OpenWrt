@@ -1,0 +1,50 @@
+name: JZ08 independent published bundle audit (NOT FLASHABLE)
+on:
+  workflow_run:
+    workflows:
+      - JZ08 development kernel/OpenWrt build (NOT FLASHABLE)
+    types:
+      - completed
+permissions:
+  actions: read
+  contents: read
+jobs:
+  verify-published-zip:
+    if: ${{ github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject a failed or cancelled producer
+        shell: bash
+        env:
+          PRODUCER_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          if [ "$PRODUCER_CONCLUSION" != success ]; then
+            echo "FATAL: producer did not publish a verified JZ08 ZIP ($PRODUCER_CONCLUSION)" >&2
+            exit 1
+          fi
+      - name: Download exactly the engineering bundle from the completed run
+        uses: actions/download-artifact@v4
+        with:
+          name: JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE
+          path: verified-download
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Independently verify ZIP bytes, every required member, manifest and SHA256SUMS
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 ci/verify_jz08_bundle.py \
+            --archive verified-download/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip \
+            --sha256 verified-download/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip.sha256 \
+            --verification verified-download/JZ08_BUNDLE_VERIFICATION.json \
+            | tee JZ08_INDEPENDENT_BUNDLE_AUDIT.json
+      - name: Publish independent audit report (no images)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: JZ08_INDEPENDENT_BUNDLE_AUDIT_NOT_FLASHABLE
+          path: JZ08_INDEPENDENT_BUNDLE_AUDIT.json
+          if-no-files-found: error
+          retention-days: 14
