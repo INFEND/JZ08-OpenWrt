@@ -11,7 +11,8 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ci"))
 from verify_jz08_bundle import (REQUIRED, verify, require_matching_rootfs_audit,
-                                require_kernel_appended_dtb, require_embedded_initramfs)
+                                require_kernel_appended_dtb, require_embedded_initramfs,
+                                require_ram_only_cmdline)
 
 
 class IndependentBundleVerificationTests(unittest.TestCase):
@@ -67,6 +68,43 @@ class IndependentBundleVerificationTests(unittest.TestCase):
             "hardware_tested": False,
             "full_device_boot_ready": False,
         }))
+
+    def write_candidate_cmdline(self, primary=b"earlycon rdinit=/init",
+                                extra=b""):
+        path = Path(self.tmp.name) / "candidate.img"
+        header = bytearray(2048)
+        header[:8] = b"ANDROID!"
+        header[64:64 + len(primary)] = primary
+        header[608:608 + len(extra)] = extra
+        path.write_bytes(header)
+        return path
+
+    def test_ram_only_cmdline_checks_both_android_boot_fields(self):
+        path = self.write_candidate_cmdline(extra=b"console=ttyMSM0,115200")
+        self.assertIn("rdinit=/init", require_ram_only_cmdline(path))
+
+    def test_ram_only_cmdline_rejects_hidden_root_in_extra_field(self):
+        path = self.write_candidate_cmdline(extra=b"root=/dev/mmcblk0p14")
+        with self.assertRaisesRegex(ValueError, "unsafe root/init"):
+            require_ram_only_cmdline(path)
+
+    def test_ram_only_cmdline_rejects_substring_and_conflicting_init(self):
+        for primary, extra in (
+            (b"foo=rdinit=/init", b""),
+            (b"rdinit=/init", b"init=/bin/sh"),
+            (b"rdinit=/init", b"rdinit=/bin/sh"),
+            (b"rdinit=/init", b"rdinit=/init"),
+        ):
+            with self.subTest(primary=primary, extra=extra):
+                path = self.write_candidate_cmdline(primary, extra)
+                with self.assertRaises(ValueError):
+                    require_ram_only_cmdline(path)
+
+    def test_ram_only_cmdline_rejects_nonzero_after_nul(self):
+        path = self.write_candidate_cmdline(
+            primary=b"rdinit=/init\\x00root=/dev/mmcblk0p14".replace(b"\\x00", b"\x00"))
+        with self.assertRaisesRegex(ValueError, "after NUL"):
+            require_ram_only_cmdline(path)
 
     def test_kernel_payload_has_exact_appended_board_dtb(self):
         kernel = Path(self.tmp.name) / "kernel.bin"
