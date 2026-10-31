@@ -9,7 +9,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ci"))
-from verify_jz08_bundle import REQUIRED, verify
+from verify_jz08_bundle import REQUIRED, verify, require_matching_rootfs_audit
 
 
 class IndependentBundleVerificationTests(unittest.TestCase):
@@ -127,6 +127,51 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         self.sha.write_text("0" * 64 + "  " + self.archive.name + "\n")
         with self.assertRaisesRegex(ValueError, "external SHA256"):
             verify(self.archive, self.sha, self.report, inspect_payloads=False)
+
+
+    def test_independent_rootfs_audit_must_match_actual_bytes(self):
+        actual = {
+            "status": "OFFLINE_USERSPACE_CHECK_PASS_ONLY",
+            "flash_allowed": False,
+            "hardware_tested": False,
+            "rootfs_executed": False,
+            "errors": [],
+            "required_elf": {
+                "/sbin/init": {"valid": True, "sha256": "a" * 64}
+            },
+            "required_assets": {
+                "/usr/lib/lua/luci/i18n/base.ru.lmo":
+                    {"valid": True, "size": 512, "sha256": "b" * 64}
+            },
+            "observed_paths_not_boot_proof": {
+                "/usr/sbin/ModemManager": {"present": True, "type": "file"}
+            },
+        }
+        require_matching_rootfs_audit(actual, dict(actual))
+        import copy
+        for section, key, value in (
+            ("required_elf", "/sbin/init", {"valid": True, "sha256": "c" * 64}),
+            ("required_assets", "/usr/lib/lua/luci/i18n/base.ru.lmo",
+             {"valid": True, "size": 512, "sha256": "d" * 64}),
+            ("observed_paths_not_boot_proof", "/usr/sbin/ModemManager",
+             {"present": False, "type": "missing"}),
+        ):
+            claimed = copy.deepcopy(actual)
+            claimed[section][key] = value
+            with self.subTest(section=section), self.assertRaisesRegex(
+                    ValueError, "differs from extracted system.img"):
+                require_matching_rootfs_audit(actual, claimed)
+
+    def test_independent_rootfs_audit_rejects_failed_actual_rootfs(self):
+        actual = {
+            "status": "REJECTED_USERSPACE",
+            "flash_allowed": False,
+            "hardware_tested": False,
+            "rootfs_executed": False,
+            "errors": ["missing Russian LuCI"],
+        }
+        with self.assertRaisesRegex(ValueError, "fails runtime checks"):
+            require_matching_rootfs_audit(actual, actual)
 
 
 if __name__ == "__main__":
