@@ -40,6 +40,14 @@ jobs:
           path: verified-download
           run-id: ${{ steps.producer.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install tools for independent rootfs extraction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends android-sdk-libsparse-utils squashfs-tools
+          command -v simg2img
+          command -v unsquashfs
       - name: Independently audit actual images, initramfs, packages and checksums
         shell: bash
         run: |
