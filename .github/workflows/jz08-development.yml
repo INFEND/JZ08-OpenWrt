@@ -8,6 +8,7 @@ on:
       - ci/check_built_jz08.py
       - ci/audit_rootfs_runtime.py
       - ci/audit_initramfs_cpio.py
+      - ci/locate_initramfs_cpio.py
       - ci/package_jz08_experiment.py
       - board/msm8916-generic-jz08-prototype.dts
       - board/msm8916.mk.append

@@ -13,6 +13,7 @@ import tempfile
 import zipfile
 
 from check_built_jz08 import android_boot_v0_header_details, squashfs_v4_superblock_details
+from locate_initramfs_cpio import locate
 
 BOARD = "JZ08-3000-NKV 1.0"
 BUNDLE_NAME = "JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip"
@@ -135,9 +136,9 @@ def assemble(source, openwrt):
     required(cpio_audit["status"] == "INITRAMFS_CPIO_CONTENTS_VERIFIED_NOT_BOOT_PROOF"
              and cpio_audit["flash_allowed"] is False,
              "embedded initramfs contents audit failed")
-    cpio_matches = list((openwrt / "build_dir").rglob("initrd.cpio"))
-    required(len(cpio_matches) == 1, "expected one initrd.cpio source")
-    cpio = cpio_matches[0]
+    # The archive may originate from Linux usr/initramfs_data.cpio or
+    # OpenWrt's separate KERNEL_BUILD_DIR/initrd.cpio.
+    cpio = locate(openwrt)
     required(cpio_audit["archive_sha256"] == sha256(cpio) and
              cpio_audit["archive_bytes"] == cpio.stat().st_size,
              "initramfs CPIO content hash mismatch")

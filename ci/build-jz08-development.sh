@@ -131,11 +131,10 @@ printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" 
 # Keep diagnostic manifests only; images are excluded on purpose.
 find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
 # Independently inspect the exact cpio embedded by the OpenWrt initramfs build.
-INITRAMFS_CPIO="$(find "$OW/build_dir" -type f -name 'initrd.cpio' -print -quit)"
-test -n "$INITRAMFS_CPIO" && test -s "$INITRAMFS_CPIO" || {
-  echo "FATAL: embedded initramfs CPIO source missing" >&2
-  exit 1
-}
+# OpenWrt normally embeds Linux usr/initramfs_data.cpio; separate mode uses
+# KERNEL_BUILD_DIR/initrd.cpio. Resolve exactly one audited source, never a guess.
+INITRAMFS_CPIO="$(python3 "$ROOT/ci/locate_initramfs_cpio.py" --openwrt "$OW")"
+echo "Auditing kernel-generated initramfs: $INITRAMFS_CPIO"
 python3 "$ROOT/ci/audit_initramfs_cpio.py" --cpio "$INITRAMFS_CPIO" \
   --output "$ROOT/output/JZ08_INITRAMFS_CPIO_AUDIT.json"
 # Prepare a separate RAM-only candidate with embedded initramfs and no eMMC root.

@@ -65,7 +65,7 @@ class EngineeringBundleTests(unittest.TestCase):
         (output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img").write_bytes(candidate)
         cpio = self.openwrt / "build_dir/linux-test/initrd.cpio"
         cpio.parent.mkdir(parents=True)
-        cpio.write_bytes(b"synthetic cpio fixture")
+        cpio.write_bytes(b"070701" + b"0" * 200)
         (output / "JZ08_INITRAMFS_CPIO_AUDIT.json").write_text(json.dumps({
             "status": "INITRAMFS_CPIO_CONTENTS_VERIFIED_NOT_BOOT_PROOF",
             "flash_allowed": False, "archive_sha256": digest(cpio),
