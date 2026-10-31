@@ -142,6 +142,45 @@ def squashfs_v4_superblock_details(path):
         return details
 
 
+def android_boot_v0_header_details(path):
+    """Check the actual Android boot v0 header and kernel payload bounds.
+
+    Pinned upstream uses mkbootimg --kernel ... --ramdisk /dev/null.
+    append-metadata adds OpenWrt bytes after the image, so do not require
+    the whole file length to be page aligned. This is NOT a bootability test.
+    """
+    with path.open("rb") as stream:
+        header = stream.read(48)
+    size = path.stat().st_size
+    details = {"file_size": size, "format": "android_boot_legacy"}
+    if len(header) < 48:
+        return {**details, "valid": False, "failed_checks": ["header_length"]}
+    kernel_size = int.from_bytes(header[8:12], "little")
+    ramdisk_size = int.from_bytes(header[16:20], "little")
+    second_size = int.from_bytes(header[24:28], "little")
+    page_size = int.from_bytes(header[36:40], "little")
+    details.update(kernel_size=kernel_size, ramdisk_size=ramdisk_size,
+                   second_size=second_size, page_size=page_size)
+    valid_page = (2048 <= page_size <= 65536 and page_size & (page_size - 1) == 0)
+    checks = {
+        "magic": header[:8] == b"ANDROID!",
+        "page_size": valid_page,
+        "kernel_size": kernel_size > 0,
+    }
+    if valid_page:
+        aligned_kernel = ((kernel_size + page_size - 1) // page_size) * page_size
+        aligned_ramdisk = ((ramdisk_size + page_size - 1) // page_size) * page_size
+        aligned_second = ((second_size + page_size - 1) // page_size) * page_size
+        minimum = page_size + aligned_kernel + aligned_ramdisk + aligned_second
+        details["minimum_payload_bytes"] = minimum
+        checks["payload_bounds"] = minimum <= size
+    else:
+        checks["payload_bounds"] = False
+    details["failed_checks"] = [key for key, ok in checks.items() if not ok]
+    details["valid"] = not details["failed_checks"]
+    return details
+
+
 def squashfs_v4_superblock_valid(path):
     """Retain the predicate for offline tests and callers."""
     return squashfs_v4_superblock_details(path)["valid"]
@@ -193,9 +232,12 @@ def check(source, log, root):
         for p in matches:
             with p.open("rb") as f:
                 header = f.read(len(magic) if magic is not None else 4)
-            valid = (header == magic if magic is not None else True) and p.stat().st_size > 4096
+            boot_header = android_boot_v0_header_details(p) if suffix == "boot.img" else None
+            valid = (boot_header["valid"] if boot_header is not None else
+                     p.stat().st_size > 4096)
             if not valid:
-                errors.append(f"JZ08 {suffix} is missing its expected image header")
+                details = ", ".join(boot_header["failed_checks"]) if boot_header else "image_size"
+                errors.append(f"JZ08 {suffix} is missing or has an invalid image header ({details})")
             superblock = None
             if suffix == "system.img":
                 superblock = squashfs_v4_superblock_details(p)
@@ -212,6 +254,8 @@ def check(source, log, root):
                 "header_verified": valid,
                 "published": False,
             }
+            if boot_header is not None:
+                image_record["android_boot_header"] = boot_header
             if superblock is not None:
                 image_record["squashfs_superblock"] = superblock
             images.append(image_record)
