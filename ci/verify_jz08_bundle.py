@@ -365,6 +365,7 @@ def verify(archive_path: Path, checksum_path: Path, report_path: Path, inspect_p
             "members": len(REQUIRED), "flash_allowed": False,
             "hardware_tested": False,
             "real_payloads_inspected": bool(inspect_payloads),
+            "kernel_appended_jz08_dtb_verified": bool(inspect_payloads),
             "rootfs_contents_rechecked": bool(inspect_payloads)}
 
 
