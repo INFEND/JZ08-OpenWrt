@@ -37,6 +37,64 @@ def require(condition, reason):
 
 
 
+
+def require_matching_rootfs_audit(actual, claimed):
+    """Fail closed if the downloaded rootfs disagrees with its build report."""
+    require(actual.get("status") == "OFFLINE_USERSPACE_CHECK_PASS_ONLY"
+            and actual.get("flash_allowed") is False
+            and actual.get("hardware_tested") is False
+            and actual.get("rootfs_executed") is False
+            and actual.get("errors") == [],
+            "independently extracted rootfs fails runtime checks")
+    for field in ("status", "flash_allowed", "hardware_tested",
+                  "rootfs_executed", "errors", "required_elf",
+                  "required_assets", "observed_paths_not_boot_proof"):
+        require(actual.get(field) == claimed.get(field),
+                "published runtime audit differs from extracted system.img: " + field)
+
+
+def verify_actual_rootfs(system_image, claimed_runtime):
+    """Re-extract the PUBLISHED system.img, never trusting its audit alone.
+
+    This uses offline userspace tools on an ephemeral GitHub runner; no device
+    nodes, eMMC writes, executable payload runs, or network calls are made.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+    from audit_rootfs_runtime import audit as audit_rootfs
+
+    for command in ("simg2img", "unsquashfs", "sudo"):
+        require(shutil.which(command) is not None,
+                "independent rootfs audit requires " + command)
+    with tempfile.TemporaryDirectory(prefix="jz08-independent-rootfs-") as tmp:
+        raw = Path(tmp) / "rootfs.raw"
+        extracted = Path(tmp) / "extracted"
+        try:
+            try:
+                subprocess.run(["simg2img", str(system_image), str(raw)],
+                               check=True, capture_output=True, timeout=120)
+                subprocess.run([
+                    "sudo", "-n", "unsquashfs", "-strict-errors",
+                    "-no-progress", "-no-xattrs", "-processors", "2",
+                    "-dest", str(extracted), str(raw)
+                ], check=True, capture_output=True, timeout=180)
+            except (OSError, subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired) as exc:
+                raise ValueError(
+                    "JZ08 ZIP VERIFICATION FAILED: independently extracting "
+                    "published system.img failed: " + str(exc)) from exc
+            actual = audit_rootfs(extracted)
+            require_matching_rootfs_audit(actual, claimed_runtime)
+        finally:
+            # unsquashfs runs as root to preserve special filesystem entries.
+            # Only remove the path inside our private, freshly-created temp dir.
+            if extracted.exists():
+                subprocess.run(["sudo", "-n", "rm", "-rf", "--",
+                                str(extracted)], check=True, timeout=60)
+    return "INDEPENDENT_PUBLISHED_ROOTFS_CONTENT_VERIFIED_NOT_BOOT_PROOF"
+
+
 def verify_real_payloads(zf):
     """Independently inspect binary contents, not just self-declared hashes.
 
@@ -177,7 +235,8 @@ def verify_real_payloads(zf):
                                  "/usr/sbin/ModemManager", "/usr/sbin/rmtfs",
                                  "/www/cgi-bin/luci")),
                 "published runtime audit lacks required services")
-    return "INDEPENDENT_REAL_PAYLOAD_CONTENT_VERIFIED_NOT_BOOT_PROOF"
+        verify_actual_rootfs(system, runtime)
+    return "INDEPENDENT_REAL_PAYLOAD_AND_ROOTFS_CONTENT_VERIFIED_NOT_BOOT_PROOF"
 
 
 def verify(archive_path: Path, checksum_path: Path, report_path: Path, inspect_payloads=True):
@@ -259,7 +318,8 @@ def verify(archive_path: Path, checksum_path: Path, report_path: Path, inspect_p
             "archive": archive_path.name, "sha256": digest,
             "members": len(REQUIRED), "flash_allowed": False,
             "hardware_tested": False,
-            "real_payloads_inspected": bool(inspect_payloads)}
+            "real_payloads_inspected": bool(inspect_payloads),
+            "rootfs_contents_rechecked": bool(inspect_payloads)}
 
 
 def main():
