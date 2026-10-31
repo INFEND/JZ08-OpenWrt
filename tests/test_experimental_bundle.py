@@ -55,6 +55,14 @@ class EngineeringBundleTests(unittest.TestCase):
         fdt[4:8] = (1024).to_bytes(4, "big")
         fdt[64:64 + len(b"xarkon,jz08-3000-nkv\x00")] = b"xarkon,jz08-3000-nkv\x00"
         dtb.write_bytes(fdt)
+        initramfs = target / "openwrt-jz08-initramfs-kernel.bin"
+        initramfs.write_bytes(b"\x1f\x8b" + bytes(8190))
+        candidate = bytearray(2048 + initramfs.stat().st_size)
+        candidate[:8] = b"ANDROID!"
+        candidate[8:12] = initramfs.stat().st_size.to_bytes(4, "little")
+        candidate[36:40] = (2048).to_bytes(4, "little")
+        candidate[64:64 + len(b"rdinit=/init")] = b"rdinit=/init"
+        (output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img").write_bytes(candidate)
         self.audit = {
             "status": "BUILD_CHECKS_PASS_ONLY", "errors": [],
             "flash_allowed": False, "hardware_tested": False,
@@ -99,6 +107,8 @@ class EngineeringBundleTests(unittest.TestCase):
             names = set(archive.namelist())
             for name in ("images/boot.img", "images/system.img",
                          "images/kernel-from-boot.bin",
+                         "images/initramfs-kernel.bin",
+                         "images/RAM_ONLY_INITRAMFS_CANDIDATE.img",
                          "images/msm8916-generic-jz08-3000-nkv.dtb",
                          "SHA256SUMS", "MANIFEST.json", "README_FIRST_RU.txt"):
                 self.assertIn(name, names)
@@ -113,6 +123,13 @@ class EngineeringBundleTests(unittest.TestCase):
         path = self.openwrt / self.audit["build_images"][0]["path"]
         path.write_bytes(path.read_bytes() + b"tampered")
         with self.assertRaisesRegex(ValueError, "image audit mismatch"):
+            bundle.assemble(self.source, self.openwrt)
+
+    def test_missing_initramfs_rejected(self):
+        path = next((self.openwrt / "bin/targets/msm89xx/msm8916").glob(
+            "*jz08*initramfs-kernel.bin"))
+        path.unlink()
+        with self.assertRaisesRegex(ValueError, "initramfs kernel"):
             bundle.assemble(self.source, self.openwrt)
 
     def test_missing_russian_catalog_rejected(self):
