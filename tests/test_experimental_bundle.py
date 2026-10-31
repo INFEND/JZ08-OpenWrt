@@ -63,6 +63,14 @@ class EngineeringBundleTests(unittest.TestCase):
         candidate[36:40] = (2048).to_bytes(4, "little")
         candidate[64:64 + len(b"rdinit=/init")] = b"rdinit=/init"
         (output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img").write_bytes(candidate)
+        cpio = self.openwrt / "build_dir/linux-test/initrd.cpio"
+        cpio.parent.mkdir(parents=True)
+        cpio.write_bytes(b"synthetic cpio fixture")
+        (output / "JZ08_INITRAMFS_CPIO_AUDIT.json").write_text(json.dumps({
+            "status": "INITRAMFS_CPIO_CONTENTS_VERIFIED_NOT_BOOT_PROOF",
+            "flash_allowed": False, "archive_sha256": digest(cpio),
+            "archive_bytes": cpio.stat().st_size,
+        }))
         self.audit = {
             "status": "BUILD_CHECKS_PASS_ONLY", "errors": [],
             "flash_allowed": False, "hardware_tested": False,
@@ -108,6 +116,7 @@ class EngineeringBundleTests(unittest.TestCase):
             for name in ("images/boot.img", "images/system.img",
                          "images/kernel-from-boot.bin",
                          "images/initramfs-kernel.bin",
+                         "images/initrd.cpio",
                          "images/RAM_ONLY_INITRAMFS_CANDIDATE.img",
                          "images/msm8916-generic-jz08-3000-nkv.dtb",
                          "SHA256SUMS", "MANIFEST.json", "README_FIRST_RU.txt"):
