@@ -32,6 +32,11 @@ class DevelopmentProfile(unittest.TestCase):
         self.assertIn('sudo -n rm -rf -- "$ROOTFS_TMP"', script)
         self.assertNotIn('mkdir -p "$ROOTFS_EXTRACT"', script)
         self.assertIn('flash_allowed=false', script)
+        self.assertIn(
+            '\npython3 "$ROOT/ci/audit_rootfs_runtime.py" --root "$ROOTFS_EXTRACT" '
+            '--output "$ROOT/output/JZ08_ROOTFS_RUNTIME_AUDIT.json"\n', script)
+        workflow = (ROOT / ".github/workflows/jz08-development.yml").read_text()
+        self.assertIn("\n      - ci/audit_rootfs_runtime.py\n", workflow)
 
     def test_prepare_adds_dtb_patch_and_required_config(self):
         with tempfile.TemporaryDirectory() as tmp:
