@@ -11,6 +11,9 @@ on:
       - board/msm8916-generic-jz08-prototype.dts
       - board/msm8916.mk.append
   workflow_dispatch:
+concurrency:
+  group: jz08-development-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
