@@ -48,6 +48,13 @@ jobs:
             --sha256 verified-download/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip.sha256 \
             --verification verified-download/JZ08_BUNDLE_VERIFICATION.json \
             | tee JZ08_INDEPENDENT_BUNDLE_AUDIT.json
+          python3 - <<'PY'
+          import json
+          result = json.load(open("JZ08_INDEPENDENT_BUNDLE_AUDIT.json"))
+          assert result["real_payloads_inspected"] is True
+          assert result["rootfs_contents_rechecked"] is True
+          assert result["flash_allowed"] is False
+          PY
       - name: Publish independent audit report (no images)
         if: success()
         uses: actions/upload-artifact@v4
