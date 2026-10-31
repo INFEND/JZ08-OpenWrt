@@ -19,6 +19,15 @@ class DevelopmentProfile(unittest.TestCase):
         for pkg in ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager"):
             self.assertIn(pkg, text)
 
+    def test_rootfs_content_audit_uses_supported_strict_extraction(self):
+        script = (ROOT / "ci/build-jz08-development.sh").read_text()
+        self.assertNotIn("unsquashfs -test", script)
+        self.assertIn("unsquashfs -strict-errors -no-progress -no-xattrs", script)
+        self.assertIn('-dest "$ROOTFS_EXTRACT" "$ROOTFS_RAW"', script)
+        self.assertIn('simg2img "$ROOTFS_IMAGE" "$ROOTFS_RAW"', script)
+        self.assertIn('trap \'sudo -n rm -rf -- "$ROOTFS_EXTRACT"; rm -f -- "$ROOTFS_RAW"\' EXIT', script)
+        self.assertIn('flash_allowed=false', script)
+
     def test_prepare_adds_dtb_patch_and_required_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
