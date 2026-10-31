@@ -80,6 +80,41 @@ def require_kernel_appended_dtb(kernel_path, expected_dtb):
 
 
 
+
+def require_embedded_initramfs(kernel_path, cpio_path):
+    """Prove the published CPIO bytes are inside the RAM-only kernel.
+
+    A matching standalone CPIO audit is not enough: the boot candidate must
+    actually contain that archive. Decompress only the first gzip member,
+    before the separately appended JZ08 DTB. This is an offline content proof,
+    not evidence that LK2ND will load the kernel or execute /init.
+    """
+    import zlib
+
+    cpio = cpio_path.read_bytes()
+    require(len(cpio) >= 110 and cpio[:6] in (b"070701", b"070702"),
+            "published initramfs is not a newc CPIO")
+    decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    decoded = bytearray()
+    with kernel_path.open("rb") as stream:
+        while not decompressor.eof:
+            block = stream.read(1024 * 1024)
+            require(bool(block), "RAM-only kernel gzip is incomplete")
+            try:
+                decoded.extend(decompressor.decompress(block))
+            except zlib.error as exc:
+                raise ValueError(
+                    "JZ08 ZIP VERIFICATION FAILED: corrupt RAM-only kernel gzip: "
+                    + str(exc)) from exc
+            require(len(decoded) <= 256 * 1024 * 1024,
+                    "RAM-only kernel expands beyond offline safety limit")
+    require(decoded.find(cpio) >= 0,
+            "published initrd.cpio is not byte-identically embedded in RAM-only kernel")
+    return {"embedded_cpio_sha256": hashlib.sha256(cpio).hexdigest(),
+            "embedded_cpio_bytes": len(cpio),
+            "kernel_uncompressed_bytes": len(decoded)}
+
+
 def require_matching_rootfs_audit(actual, claimed):
     """Fail closed if the downloaded rootfs disagrees with its build report."""
     require(actual.get("status") == "OFFLINE_USERSPACE_CHECK_PASS_ONLY"
@@ -231,6 +266,7 @@ def verify_real_payloads(zf):
 
         cpio = paths["images/initrd.cpio"]
         actual_cpio = audit_cpio(cpio)
+        require_embedded_initramfs(initramfs_kernel, cpio)
         claimed_cpio = json.loads(zf.read("audit/JZ08_INITRAMFS_CPIO_AUDIT.json"))
         for field in ("status", "archive_sha256", "archive_bytes", "entries",
                       "required_paths", "flash_allowed", "hardware_tested",
