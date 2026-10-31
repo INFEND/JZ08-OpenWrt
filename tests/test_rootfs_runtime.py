@@ -40,6 +40,10 @@ class RootfsRuntimeAudit(unittest.TestCase):
         (self.root / "sbin/init").symlink_to("/sbin/procd")
         (self.root / "bin/busybox").write_bytes(fake_elf())
         (self.root / "bin/busybox").chmod(0o755)
+        # Real pinned LuCI translation location (not /www/luci-static).
+        translation = self.root / "usr/lib/lua/luci/i18n/base.ru.lmo"
+        translation.parent.mkdir(parents=True)
+        translation.write_bytes(b"synthetic-nonempty-lmo")
 
     def test_valid_offline_userspace_stays_not_flashable(self):
         report = audit_module.audit(self.root)
@@ -49,6 +53,20 @@ class RootfsRuntimeAudit(unittest.TestCase):
         self.assertFalse(report["hardware_tested"])
         self.assertFalse(report["rootfs_executed"])
         self.assertEqual(report["required_elf"]["/sbin/init"]["resolved_path"], "/sbin/procd")
+        self.assertTrue(report["required_assets"]["/usr/lib/lua/luci/i18n/base.ru.lmo"]["valid"])
+
+    def test_missing_russian_translation_rejected(self):
+        (self.root / "usr/lib/lua/luci/i18n/base.ru.lmo").unlink()
+        report = audit_module.audit(self.root)
+        self.assertEqual(report["status"], "REJECTED_USERSPACE")
+        self.assertTrue(any("translation asset is absent" in x for x in report["errors"]))
+        self.assertFalse(report["flash_allowed"])
+
+    def test_empty_russian_translation_rejected(self):
+        (self.root / "usr/lib/lua/luci/i18n/base.ru.lmo").write_bytes(b"")
+        report = audit_module.audit(self.root)
+        self.assertEqual(report["status"], "REJECTED_USERSPACE")
+        self.assertTrue(any("translation asset is empty" in x for x in report["errors"]))
 
     def test_wrong_architecture_rejected(self):
         (self.root / "bin/busybox").write_bytes(fake_elf(machine=40))
