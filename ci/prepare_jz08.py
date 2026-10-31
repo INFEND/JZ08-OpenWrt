@@ -53,12 +53,15 @@ def run(upstream: pathlib.Path, openwrt: pathlib.Path):
     required = ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager")
     removed = ("CONFIG_PACKAGE_router-display=",
                "CONFIG_PACKAGE_kmod-fbtft-gc9107=")
-    overrides = tuple(f"CONFIG_PACKAGE_{name}=" for name in required)
+    overrides = tuple(f"CONFIG_PACKAGE_{name}=" for name in required) + ("CONFIG_TARGET_ROOTFS_INITRAMFS=",)
     filtered = [
         line for line in old.splitlines()
         if not line.startswith(removed + overrides)
     ]
     filtered.extend(f"CONFIG_PACKAGE_{name}=y" for name in required)
+    # Embed userspace in a RAM-only initramfs kernel candidate. This avoids
+    # assuming that an OEM eMMC partition contains an OpenWrt rootfs.
+    filtered.append("CONFIG_TARGET_ROOTFS_INITRAMFS=y")
     (openwrt / ".config").write_text("\n".join(filtered) + "\n")
     print("JZ08 DEVELOPMENT PROFILE ADDED: NO GPIO ENABLED / NO OEM GPT / NO FLASHING")
     print("Linux patch:",patch)
