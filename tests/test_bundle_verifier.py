@@ -67,15 +67,21 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         }))
 
     def test_valid_complete_archive(self):
-        result = verify(self.archive, self.sha, self.report)
+        result = verify(self.archive, self.sha, self.report, inspect_payloads=False)
         self.assertFalse(result["flash_allowed"])
         self.assertEqual(result["members"], len(REQUIRED))
+
+    def test_deep_audit_rejects_synthetic_binaries_even_when_hashes_match(self):
+        # Metadata-only validation is insufficient: the payloads here are
+        # deliberately synthetic, despite having matching SHA256SUMS.
+        with self.assertRaisesRegex(ValueError, "Android boot image"):
+            verify(self.archive, self.sha, self.report, inspect_payloads=True)
 
     def test_missing_required_member(self):
         self.members.pop("images/initrd.cpio")
         self.build()
         with self.assertRaisesRegex(ValueError, "required ZIP member"):
-            verify(self.archive, self.sha, self.report)
+            verify(self.archive, self.sha, self.report, inspect_payloads=False)
 
     def test_bad_member_checksum(self):
         self.build()
@@ -88,7 +94,7 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         report["members"] += 1
         self.report.write_text(json.dumps(report))
         with self.assertRaisesRegex(ValueError, "required ZIP member"):
-            verify(self.archive, self.sha, self.report)
+            verify(self.archive, self.sha, self.report, inspect_payloads=False)
 
     def test_modified_member_with_stale_checksums(self):
         self.members["images/initrd.cpio"] = b"changed contents"
@@ -99,7 +105,7 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         self.members["SHA256SUMS"] = old.replace(current, "0" * 64).encode()
         self.build_with_current_sums()
         with self.assertRaisesRegex(ValueError, "differs from SHA256SUMS"):
-            verify(self.archive, self.sha, self.report)
+            verify(self.archive, self.sha, self.report, inspect_payloads=False)
 
     def build_with_current_sums(self):
         with zipfile.ZipFile(self.archive, "w") as zf:
@@ -115,12 +121,12 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         self.manifest["flash_allowed"] = True
         self.build()
         with self.assertRaisesRegex(ValueError, "unsafe or incomplete"):
-            verify(self.archive, self.sha, self.report)
+            verify(self.archive, self.sha, self.report, inspect_payloads=False)
 
     def test_external_checksum_rejected(self):
         self.sha.write_text("0" * 64 + "  " + self.archive.name + "\n")
         with self.assertRaisesRegex(ValueError, "external SHA256"):
-            verify(self.archive, self.sha, self.report)
+            verify(self.archive, self.sha, self.report, inspect_payloads=False)
 
 
 if __name__ == "__main__":
