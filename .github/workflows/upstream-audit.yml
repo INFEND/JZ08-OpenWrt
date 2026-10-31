@@ -3,6 +3,12 @@ on:
   push:
     paths:
       - ci/audit_upstream.py
+      - ci/build-jz08-development.sh
+      - ci/prepare_jz08.py
+      - ci/check_built_jz08.py
+      - board/msm8916.mk.append
+      - board/msm8916-generic-jz08-prototype.dts
+      - board/jz08.json
       - .github/workflows/upstream-audit.yml
   workflow_dispatch:
 permissions:
