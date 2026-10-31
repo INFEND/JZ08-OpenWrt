@@ -113,7 +113,9 @@ for required in etc bin sbin usr; do
     exit 1
   }
 done
-# Check real extracted ARM64 init and BusyBox ELF/loaders; only JSON is retained.\npython3 "$ROOT/ci/audit_rootfs_runtime.py" --root "$ROOTFS_EXTRACT" --output "$ROOT/output/JZ08_ROOTFS_RUNTIME_AUDIT.json"\nprintf 'PASS: real JZ08 Android Sparse decoded and all SquashFS entries extracted\nsource_sha256=%s\nexpanded_bytes=%s\nflash_allowed=false\n' \
+# Check real extracted ARM64 init and BusyBox ELF/loaders; only JSON is retained.
+python3 "$ROOT/ci/audit_rootfs_runtime.py" --root "$ROOTFS_EXTRACT" --output "$ROOT/output/JZ08_ROOTFS_RUNTIME_AUDIT.json"
+printf 'PASS: real JZ08 Android Sparse decoded and all SquashFS entries extracted\nsource_sha256=%s\nexpanded_bytes=%s\nflash_allowed=false\n' \
   "$(sha256sum "$ROOTFS_IMAGE" | cut -d' ' -f1)" \
   "$(stat -c '%s' "$ROOTFS_RAW")" \
   > "$ROOT/output/JZ08_ROOTFS_CONTENTS_STATUS.txt"
