@@ -126,7 +126,7 @@ def assemble(source, openwrt):
     required(len(initramfs_matches) == 1, "expected one JZ08 embedded initramfs kernel")
     initramfs = initramfs_matches[0]
     required(initramfs.stat().st_size > 4096 and
-             initramfs.open("rb").read(2) == b"\\x1f\\x8b",
+             initramfs.open("rb").read(2) == b"\x1f\x8b",
              "initramfs kernel is missing gzip header")
     files["images/initramfs-kernel.bin"] = initramfs
     candidate = output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img"
@@ -137,7 +137,7 @@ def assemble(source, openwrt):
              "RAM-only Android boot candidate invalid")
     with candidate.open("rb") as stream:
         stream.seek(64)
-        cmdline = stream.read(512).split(b"\\x00", 1)[0]
+        cmdline = stream.read(512).split(b"\x00", 1)[0]
     required(b"rdinit=/init" in cmdline and b"root=" not in cmdline,
              "RAM-only candidate has unsafe rootfs command line")
     files["images/RAM_ONLY_INITRAMFS_CANDIDATE.img"] = candidate
