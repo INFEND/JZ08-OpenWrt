@@ -129,6 +129,20 @@ def assemble(source, openwrt):
              initramfs.open("rb").read(2) == b"\x1f\x8b",
              "initramfs kernel is missing gzip header")
     files["images/initramfs-kernel.bin"] = initramfs
+
+    cpio_report = output / "JZ08_INITRAMFS_CPIO_AUDIT.json"
+    cpio_audit = json.loads(cpio_report.read_text())
+    required(cpio_audit["status"] == "INITRAMFS_CPIO_CONTENTS_VERIFIED_NOT_BOOT_PROOF"
+             and cpio_audit["flash_allowed"] is False,
+             "embedded initramfs contents audit failed")
+    cpio_matches = list((openwrt / "build_dir").rglob("initrd.cpio"))
+    required(len(cpio_matches) == 1, "expected one initrd.cpio source")
+    cpio = cpio_matches[0]
+    required(cpio_audit["archive_sha256"] == sha256(cpio) and
+             cpio_audit["archive_bytes"] == cpio.stat().st_size,
+             "initramfs CPIO content hash mismatch")
+    files["images/initrd.cpio"] = cpio
+    files["audit/JZ08_INITRAMFS_CPIO_AUDIT.json"] = cpio_report
     candidate = output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img"
     required(candidate.is_file(), "RAM-only Android boot candidate missing")
     candidate_header = android_boot_v0_header_details(candidate)
