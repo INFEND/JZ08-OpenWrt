@@ -24,21 +24,25 @@ WARNING = """JZ08-3000-NKV 1.0 | ЭКСПЕРИМЕНТАЛЬНЫЙ КОМПЛЕ
 СТАТУС: NOT FLASHABLE / НЕ ПРОШИВАТЬ!
 
 Этот архив содержит реальные результаты сборки для анализа: boot.img,
-system.img (Android sparse SquashFS), JZ08 DTB и ядро из boot.img.
+system.img (Android sparse SquashFS), JZ08 DTB, ядро из boot.img,
+а также отдельный RAM_ONLY_INITRAMFS_CANDIDATE.img со встроенной
+файловой системой OpenWrt (без обращения к разделам eMMC).
 Проверены структура файлов, SHA-256, пакеты и содержимое rootfs.
 Это НЕ доказательство успешной загрузки на устройстве.
 
 КРИТИЧЕСКИЙ БЛОКЕР: CMDLINE использует
 root=PARTLABEL=jz08-unconfigured-rootfs, такого проверенного rootfs-раздела
-на заводской GPT нет. boot.img имеет пустой ramdisk. Поэтому этот набор
-НЕ является самодостаточной RAM-only загрузкой OpenWrt.
+на заводской GPT нет. Обычный boot.img имеет пустой ramdisk и не
+предназначен для загрузки системы. Отдельный RAM-only кандидат собран
+с rdinit=/init, но его загрузка через LK2ND на JZ08 ещё не доказана.
 
 Не выполнять команды записи через Fastboot, EDL, rawprogram, замену GPT или
 запись в eMMC. p14 на JZ08 = modemst2 (модемные данные), а не rootfs.
 Не применять чужие скрипты generic-mf68e.
 
-Для первого испытания полной системы ещё требуется доказать безопасную
-RAM-only цепочку kernel + DTB + rootfs/initramfs и параметры загрузчика.
+Для первого испытания полной системы ещё требуется подтвердить безопасный
+RAM-only запуск кандидата и параметры загрузчика, прежде чем выполнять
+какие-либо команды на физическом устройстве.
 Не подтверждены RAM-адреса, GPIO/LCD, Wi-Fi и LTE на физической плате.
 Образы внутри предназначены для инженерной проверки и сравнения.
 """
@@ -116,6 +120,28 @@ def assemble(source, openwrt):
              "JZ08 DTB mismatch")
     files["images/msm8916-generic-jz08-3000-nkv.dtb"] = dtb_path
 
+    # A RAM-only initramfs is mandatory; an eMMC-root boot.img is insufficient.
+    initramfs_matches = list(
+        (openwrt / "bin/targets/msm89xx/msm8916").glob("*jz08*initramfs-kernel.bin"))
+    required(len(initramfs_matches) == 1, "expected one JZ08 embedded initramfs kernel")
+    initramfs = initramfs_matches[0]
+    required(initramfs.stat().st_size > 4096 and
+             initramfs.open("rb").read(2) == b"\\x1f\\x8b",
+             "initramfs kernel is missing gzip header")
+    files["images/initramfs-kernel.bin"] = initramfs
+    candidate = output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img"
+    required(candidate.is_file(), "RAM-only Android boot candidate missing")
+    candidate_header = android_boot_v0_header_details(candidate)
+    required(candidate_header["valid"] and candidate_header["ramdisk_size"] == 0
+             and candidate_header["kernel_size"] == initramfs.stat().st_size,
+             "RAM-only Android boot candidate invalid")
+    with candidate.open("rb") as stream:
+        stream.seek(64)
+        cmdline = stream.read(512).split(b"\\x00", 1)[0]
+    required(b"rdinit=/init" in cmdline and b"root=" not in cmdline,
+             "RAM-only candidate has unsafe rootfs command line")
+    files["images/RAM_ONLY_INITRAMFS_CANDIDATE.img"] = candidate
+
     manifests = list((openwrt / "bin/targets/msm89xx/msm8916").glob("*jz08*.manifest"))
     required(len(manifests) == 1, "expected one JZ08 package manifest")
     files["audit/JZ08_PACKAGES.manifest"] = manifests[0]
@@ -149,7 +175,7 @@ def assemble(source, openwrt):
             "full_device_boot_ready": False,
             "boot_blockers": [
                 "root=PARTLABEL=jz08-unconfigured-rootfs does not identify a verified OEM partition",
-                "boot.img has no ramdisk; no validated RAM-only rootfs boot path",
+                "ordinary boot.img has no ramdisk; RAM-only initramfs candidate is untested",
                 "RAM loading addresses and LK2ND Linux handoff not validated",
                 "LCD GPIO/controller and LTE/Wi-Fi hardware operation unverified",
             ],
