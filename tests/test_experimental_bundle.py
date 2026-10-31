@@ -63,7 +63,8 @@ class EngineeringBundleTests(unittest.TestCase):
         candidate[36:40] = (2048).to_bytes(4, "little")
         candidate[64:64 + len(b"rdinit=/init")] = b"rdinit=/init"
         (output / "JZ08_RAM_ONLY_INITRAMFS_CANDIDATE.img").write_bytes(candidate)
-        cpio = self.openwrt / "build_dir/linux-test/initrd.cpio"
+        cpio = self.openwrt / ("build_dir/target-aarch64_generic_musl/"
+                                "linux-msm89xx_msm8916/initrd.cpio")
         cpio.parent.mkdir(parents=True)
         cpio.write_bytes(b"070701" + b"0" * 200)
         (output / "JZ08_INITRAMFS_CPIO_AUDIT.json").write_text(json.dumps({
