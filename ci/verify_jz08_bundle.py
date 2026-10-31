@@ -83,11 +83,11 @@ def verify_real_payloads(zf):
                 "ordinary boot kernel length mismatch")
         require(ram_header["kernel_size"] == initramfs_kernel.stat().st_size,
                 "RAM-only embedded kernel length mismatch")
-        require(initramfs_kernel.open("rb").read(2) == b"\\x1f\\x8b",
+        require(initramfs_kernel.open("rb").read(2) == bytes.fromhex("1f8b"),
                 "RAM-only embedded kernel is not gzip")
         with candidate.open("rb") as stream:
             stream.seek(64)
-            cmdline = stream.read(512).split(b"\\x00", 1)[0]
+            cmdline = stream.read(512).split(bytes([0]), 1)[0]
         require(b"rdinit=/init" in cmdline and b"root=" not in cmdline,
                 "RAM-only candidate contains unsafe or missing boot arguments")
 
@@ -119,7 +119,7 @@ def verify_real_payloads(zf):
         dtb_data = dtb.read_bytes()
         require(len(dtb_data) >= 1024 and dtb_data[:4] == bytes.fromhex("d00dfeed")
                 and 40 <= int.from_bytes(dtb_data[4:8], "big") <= len(dtb_data)
-                and b"xarkon,jz08-3000-nkv\\x00" in dtb_data,
+                and b"xarkon,jz08-3000-nkv" + bytes([0]) in dtb_data,
                 "compiled DTB does not identify JZ08")
         system = paths["images/system.img"]
         require(squashfs_v4_superblock_details(system)["valid"] is True,
