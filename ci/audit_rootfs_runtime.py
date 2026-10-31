@@ -13,10 +13,13 @@ import stat
 import struct
 
 REQUIRED = ("/sbin/init", "/bin/busybox")
+# Pinned LuCI luci.mk installs translations to
+# $(LUA_LIBRARYDIR)/luci/i18n, with LUA_LIBRARYDIR=/usr/lib/lua.
+# Package manifest presence alone does not prove the Russian catalog exists.
+REQUIRED_ASSETS = ("/usr/lib/lua/luci/i18n/base.ru.lmo",)
 OBSERVED = (
     "/sbin/procd", "/usr/sbin/uhttpd", "/usr/sbin/ModemManager",
     "/usr/sbin/rmtfs", "/www/cgi-bin/luci",
-    "/www/luci-static/resources/i18n/base.ru.lmo",
     "/etc/openwrt_release", "/etc/init.d/network",
 )
 
@@ -122,6 +125,22 @@ def audit(root: Path):
             errors.append(logical + ": " + str(exc))
             item["reason"] = str(exc)
         checked[logical] = item
+    required_assets = {}
+    for logical in REQUIRED_ASSETS:
+        item = {"present": False, "valid": False}
+        try:
+            path = resolve_rootfs(root, logical)
+            if not path.is_file():
+                raise ValueError("required LuCI translation asset is absent")
+            if path.stat().st_size == 0:
+                raise ValueError("required LuCI translation asset is empty")
+            item.update(present=True, valid=True,
+                        size=path.stat().st_size,
+                        sha256=hashlib.sha256(path.read_bytes()).hexdigest())
+        except (OSError, ValueError) as exc:
+            errors.append(logical + ": " + str(exc))
+            item["reason"] = str(exc)
+        required_assets[logical] = item
     observed = {}
     for logical in OBSERVED:
         try:
@@ -136,6 +155,7 @@ def audit(root: Path):
         "hardware_tested": False,
         "rootfs_executed": False,
         "required_elf": checked,
+        "required_assets": required_assets,
         "observed_paths_not_boot_proof": observed,
         "errors": errors,
     }
