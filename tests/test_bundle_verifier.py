@@ -1,4 +1,5 @@
 """Synthetic, offline tests for independent JZ08 ZIP content verification."""
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -9,7 +10,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ci"))
-from verify_jz08_bundle import REQUIRED, verify, require_matching_rootfs_audit
+from verify_jz08_bundle import (REQUIRED, verify, require_matching_rootfs_audit,
+                                require_kernel_appended_dtb)
 
 
 class IndependentBundleVerificationTests(unittest.TestCase):
@@ -65,6 +67,30 @@ class IndependentBundleVerificationTests(unittest.TestCase):
             "hardware_tested": False,
             "full_device_boot_ready": False,
         }))
+
+    def test_kernel_payload_has_exact_appended_board_dtb(self):
+        kernel = Path(self.tmp.name) / "kernel.bin"
+        board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
+        kernel.write_bytes(gzip.compress(b"K" * 8192) + board_dtb)
+        result = require_kernel_appended_dtb(kernel, board_dtb)
+        self.assertEqual(result["appended_jz08_dtb_bytes"], len(board_dtb))
+        self.assertEqual(result["gzip_uncompressed_bytes"], 8192)
+
+    def test_kernel_payload_rejects_missing_or_wrong_appended_dtb(self):
+        kernel = Path(self.tmp.name) / "kernel.bin"
+        board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
+        for trailer in (b"", b"WRONG", board_dtb + b"EXTRA"):
+            with self.subTest(trailer=trailer):
+                kernel.write_bytes(gzip.compress(b"K" * 8192) + trailer)
+                with self.assertRaisesRegex(ValueError, "exact published JZ08 DTB"):
+                    require_kernel_appended_dtb(kernel, board_dtb)
+
+    def test_kernel_payload_rejects_corrupt_or_truncated_gzip(self):
+        kernel = Path(self.tmp.name) / "kernel.bin"
+        board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
+        kernel.write_bytes(gzip.compress(b"K" * 8192)[:-8] + board_dtb)
+        with self.assertRaises(ValueError):
+            require_kernel_appended_dtb(kernel, board_dtb)
 
     def test_valid_complete_archive(self):
         result = verify(self.archive, self.sha, self.report, inspect_payloads=False)
