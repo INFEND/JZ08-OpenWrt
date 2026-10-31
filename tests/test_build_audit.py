@@ -38,7 +38,11 @@ class BuiltImageAudit(unittest.TestCase):
         self.log.write_text("Kconfig passed\n")
         self.boot = self.targets / "openwrt-jz08-boot.img"
         self.system = self.targets / "openwrt-jz08-system.img"
-        self.boot.write_bytes(b"ANDROID!" + bytes(4096))
+        boot = bytearray(8192)
+        boot[:8] = b"ANDROID!"
+        boot[8:12] = (4096).to_bytes(4, "little")  # kernel_size
+        boot[36:40] = (2048).to_bytes(4, "little")  # page_size
+        self.boot.write_bytes(boot)
         # Minimal internally consistent SquashFS v4 superblock fixture.
         squashfs = bytearray(4096 + 96)
         squashfs[:4] = b"hsqs"  # SquashFS LE, not Android sparse magic
@@ -76,6 +80,35 @@ class BuiltImageAudit(unittest.TestCase):
         self.boot.write_bytes(b"BROKEN!!" + bytes(4096))
         report = self.run_audit()
         self.assertTrue(any("boot.img" in e and "header" in e for e in report["errors"]))
+
+    def test_android_boot_header_reports_kernel_bounds(self):
+        audit.check(ROOT, self.log, self.root)
+        report = json.loads((ROOT / "output/JZ08_BUILD_AUDIT.json").read_text())
+        boot = next(x for x in report["build_images"] if x["path"].endswith("boot.img"))
+        header = boot["android_boot_header"]
+        self.assertTrue(header["valid"])
+        self.assertEqual(header["kernel_size"], 4096)
+        self.assertEqual(header["page_size"], 2048)
+        self.assertEqual(header["minimum_payload_bytes"], 6144)
+
+    def test_android_boot_rejects_oversized_kernel(self):
+        image = bytearray(self.boot.read_bytes())
+        image[8:12] = (20000).to_bytes(4, "little")
+        self.boot.write_bytes(image)
+        report = self.run_audit()
+        self.assertTrue(any("boot.img" in x and "payload_bounds" in x for x in report["errors"]))
+
+    def test_android_boot_rejects_invalid_page_size(self):
+        image = bytearray(self.boot.read_bytes())
+        image[36:40] = (3000).to_bytes(4, "little")
+        self.boot.write_bytes(image)
+        report = self.run_audit()
+        self.assertTrue(any("boot.img" in x and "page_size" in x for x in report["errors"]))
+
+    def test_android_boot_allows_appended_openwrt_metadata(self):
+        self.boot.write_bytes(self.boot.read_bytes() + b"OPENWRT-METADATA")
+        audit.check(ROOT, self.log, self.root)
+
 
     def test_invalid_squashfs_version_is_rejected(self):
         image = bytearray(self.system.read_bytes())
