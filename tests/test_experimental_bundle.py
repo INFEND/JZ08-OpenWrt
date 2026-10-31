@@ -162,7 +162,7 @@ class EngineeringBundleTests(unittest.TestCase):
             (608, b"init=/bin/sh"),
             (608, b"rdinit=/init"),
             (64, b"foo=rdinit=/init"),
-            (64, b"rdinit=/init\\x00root=/dev/mmcblk0p14".replace(b"\\x00", b"\\x00")),
+            (64, b"rdinit=/init\\x00root=/dev/mmcblk0p14".replace(b"\\x00", bytes([0]))),
         ):
             with self.subTest(offset=offset, value=value):
                 data = bytearray(original)
