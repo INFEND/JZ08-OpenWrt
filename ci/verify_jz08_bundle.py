@@ -38,6 +38,48 @@ def require(condition, reason):
 
 
 
+
+def require_kernel_appended_dtb(kernel_path, expected_dtb):
+    """Prove that the *bootable kernel payload* carries this exact JZ08 DTB.
+
+    OpenWrt's pinned msm89xx image recipe is kernel-bin | gzip | append-dtb.
+    Merely shipping a separate correct DTB does not prove that the bootloader
+    will pass that DTB to Linux. This checks gzip integrity and exact trailer
+    bytes; it does NOT prove the bootloader's RAM address or Linux handoff.
+    """
+    import zlib
+
+    decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+    uncompressed = 0
+    trailer = bytearray()
+    with kernel_path.open("rb") as stream:
+        while True:
+            block = stream.read(1024 * 1024)
+            if not block:
+                break
+            if decompressor.eof:
+                trailer.extend(block)
+                continue
+            try:
+                decoded = decompressor.decompress(block)
+            except zlib.error as exc:
+                raise ValueError(
+                    "JZ08 ZIP VERIFICATION FAILED: corrupt kernel gzip: "
+                    + str(exc)) from exc
+            uncompressed += len(decoded)
+            require(uncompressed <= 256 * 1024 * 1024,
+                    "kernel gzip expands beyond offline safety limit")
+            if decompressor.eof:
+                trailer.extend(decompressor.unused_data)
+    require(decompressor.eof and uncompressed > 4096,
+            "kernel gzip is incomplete or empty")
+    require(bytes(trailer) == expected_dtb,
+            "kernel payload does not append the exact published JZ08 DTB")
+    return {"gzip_uncompressed_bytes": uncompressed,
+            "appended_jz08_dtb_bytes": len(expected_dtb)}
+
+
+
 def require_matching_rootfs_audit(actual, claimed):
     """Fail closed if the downloaded rootfs disagrees with its build report."""
     require(actual.get("status") == "OFFLINE_USERSPACE_CHECK_PASS_ONLY"
@@ -179,6 +221,10 @@ def verify_real_payloads(zf):
                 and 40 <= int.from_bytes(dtb_data[4:8], "big") <= len(dtb_data)
                 and b"xarkon,jz08-3000-nkv" + bytes([0]) in dtb_data,
                 "compiled DTB does not identify JZ08")
+        # A separately published DTB is insufficient for this image recipe.
+        # Verify the actual gzip payloads carry the same JZ08 DTB bytes.
+        require_kernel_appended_dtb(kernel, dtb_data)
+        require_kernel_appended_dtb(initramfs_kernel, dtb_data)
         system = paths["images/system.img"]
         require(squashfs_v4_superblock_details(system)["valid"] is True,
                 "system.img sparse/SquashFS structure invalid")
