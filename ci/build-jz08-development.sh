@@ -126,4 +126,7 @@ trap - EXIT
 printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
 # Keep diagnostic manifests only; images are excluded on purpose.
 find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
-echo "Build finished. Experimental JZ08 results are NOT for flashing."
+# Assemble all verified binaries into one engineering-only archive; no flash scripts.
+# Failure to verify any mandatory member fails the entire build.
+python3 "$ROOT/ci/package_jz08_experiment.py" --source "$ROOT" --openwrt "$OW"
+echo "Build finished. Verified inspection archive produced; NOT FLASHABLE."
