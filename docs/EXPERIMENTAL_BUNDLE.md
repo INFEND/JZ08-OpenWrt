@@ -15,6 +15,8 @@ RAM-only испытания**, а не разрешение на прошивк�
   именно JZ08, но прототип LCD отключён.
 - `images/kernel-from-boot.bin`: извлечённый kernel payload из boot.img.
 - `images/initramfs-kernel.bin`: ядро с включённым в сборке initramfs.
+- `images/initrd.cpio`: исходный архив initramfs для независимого
+  контроля состава, включая `/init`, ModemManager, rmtfs и русский LuCI.
 - `images/RAM_ONLY_INITRAMFS_CANDIDATE.img`: отдельный Android boot v0
   с ядром/initramfs и параметром `rdinit=/init`, без `root=`.
   **Его фактическая загрузка на JZ08 не подтверждена.**
@@ -34,7 +36,8 @@ RAM-only испытания**, а не разрешение на прошивк�
    WCNSS/Wi-Fi, базовые службы.
 5. Полная распаковка SquashFS и ELF64/AArch64 для init/BusyBox.
 6. Реальный русский каталог LuCI и наличие основных служб в rootfs.
-7. ZIP CRC, повторное чтение каждого файла, SHA-256 каждого файла.
+7. Полный разбор initrd.cpio и наличие обязательных служб внутри initramfs.
+8. ZIP CRC, повторное чтение каждого файла, SHA-256 каждого файла.
 
 ## Неподтверждённые аппаратные условия
 
