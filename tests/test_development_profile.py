@@ -61,6 +61,7 @@ class DevelopmentProfile(unittest.TestCase):
             for pkg in ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager"):
                 self.assertEqual(config.count(f"CONFIG_PACKAGE_{pkg}=y"), 1)
             self.assertIn("CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y", config)
+            self.assertIn("CONFIG_TARGET_ROOTFS_INITRAMFS=y", config)
             self.assertNotIn("CONFIG_PACKAGE_router-display=y", config)
             patch = (target / "patches-6.12/809-arm64-dts-jz08-prototype.patch").read_text()
             self.assertIn("msm8916-generic-jz08-3000-nkv.dtb", patch)
