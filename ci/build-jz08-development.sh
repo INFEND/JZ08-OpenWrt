@@ -130,6 +130,14 @@ trap - EXIT
 printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
 # Keep diagnostic manifests only; images are excluded on purpose.
 find bin/targets/msm89xx -type f -name '*.manifest' -exec cp '{}' "$ROOT/output/" ';' || true
+# Independently inspect the exact cpio embedded by the OpenWrt initramfs build.
+INITRAMFS_CPIO="$(find "$OW/build_dir" -type f -name 'initrd.cpio' -print -quit)"
+test -n "$INITRAMFS_CPIO" && test -s "$INITRAMFS_CPIO" || {
+  echo "FATAL: embedded initramfs CPIO source missing" >&2
+  exit 1
+}
+python3 "$ROOT/ci/audit_initramfs_cpio.py" --cpio "$INITRAMFS_CPIO" \
+  --output "$ROOT/output/JZ08_INITRAMFS_CPIO_AUDIT.json"
 # Prepare a separate RAM-only candidate with embedded initramfs and no eMMC root.
 # The Android header is unverified on real JZ08/LK2ND; NEVER write this image.
 INITRAMFS_KERNEL="$(find "$OW/bin/targets/msm89xx/msm8916" -maxdepth 1 -type f -name '*jz08*initramfs-kernel.bin' -print -quit)"
