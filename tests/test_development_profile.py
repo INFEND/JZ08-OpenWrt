@@ -25,7 +25,12 @@ class DevelopmentProfile(unittest.TestCase):
         self.assertIn("unsquashfs -strict-errors -no-progress -no-xattrs", script)
         self.assertIn('-dest "$ROOTFS_EXTRACT" "$ROOTFS_RAW"', script)
         self.assertIn('simg2img "$ROOTFS_IMAGE" "$ROOTFS_RAW"', script)
-        self.assertIn('trap \'sudo -n rm -rf -- "$ROOTFS_EXTRACT"; rm -f -- "$ROOTFS_RAW"\' EXIT', script)
+        # mktemp -d must create only the parent; unsquashfs -dest must not exist.
+        self.assertIn('ROOTFS_TMP="$(mktemp -d /tmp/jz08-rootfs-files.XXXXXXXX)"', script)
+        self.assertIn('ROOTFS_EXTRACT="$ROOTFS_TMP/rootfs"', script)
+        self.assertIn('trap \'sudo -n rm -rf -- "$ROOTFS_TMP"; rm -f -- "$ROOTFS_RAW"\' EXIT', script)
+        self.assertIn('sudo -n rm -rf -- "$ROOTFS_TMP"', script)
+        self.assertNotIn('mkdir -p "$ROOTFS_EXTRACT"', script)
         self.assertIn('flash_allowed=false', script)
 
     def test_prepare_adds_dtb_patch_and_required_config(self):
