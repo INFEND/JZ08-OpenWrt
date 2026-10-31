@@ -5,7 +5,7 @@ on:
       - .github/workflows/jz08-development.yml
       - ci/build-jz08-development.sh
       - ci/prepare_jz08.py
-      - ci/check_built_jz08.py
+      - ci/check_built_jz08.py\n      - ci/audit_rootfs_runtime.py
       - board/msm8916-generic-jz08-prototype.dts
       - board/msm8916.mk.append
   workflow_dispatch:
