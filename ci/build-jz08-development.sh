@@ -92,19 +92,31 @@ command -v simg2img >/dev/null || {
 sudo apt-get update -qq
 sudo apt-get install -y -qq --no-install-recommends squashfs-tools
 ROOTFS_RAW="$(mktemp /tmp/jz08-rootfs-audit.XXXXXXXX.raw)"
-trap 'rm -f "$ROOTFS_RAW"' EXIT
+ROOTFS_EXTRACT="$(mktemp -d /tmp/jz08-rootfs-files.XXXXXXXX)"
+# OpenWrt rootfs can contain device nodes. Extract as root on the ephemeral
+# CI runner, with strict errors and no persistent extraction artifacts.
+# Ubuntu squashfs-tools 4.5 does NOT support the non-existent -test flag.
+trap 'sudo -n rm -rf -- "$ROOTFS_EXTRACT"; rm -f -- "$ROOTFS_RAW"' EXIT
 simg2img "$ROOTFS_IMAGE" "$ROOTFS_RAW"
-if ! unsquashfs -test "$ROOTFS_RAW" > "$ROOT/output/JZ08_ROOTFS_CONTENTS_TEST.txt" 2>&1; then
-  echo "FATAL: real JZ08 SquashFS content decompression failed" >&2
+if ! sudo -n unsquashfs -strict-errors -no-progress -no-xattrs -processors 2 -dest "$ROOTFS_EXTRACT" "$ROOTFS_RAW" > "$ROOT/output/JZ08_ROOTFS_CONTENTS_TEST.txt" 2>&1; then
+  echo "FATAL: real JZ08 SquashFS extraction/content decompression failed" >&2
   tail -n 100 "$ROOT/output/JZ08_ROOTFS_CONTENTS_TEST.txt" >&2
   exit 1
 fi
-printf 'PASS: real JZ08 Android Sparse decoded and SquashFS files decompressed\nsource_sha256=%s\nexpanded_bytes=%s\nflash_allowed=false\n' \
+# Confirm the extraction created the expected Linux root tree.
+for required in etc bin sbin usr; do
+  test -d "$ROOTFS_EXTRACT/$required" || {
+    echo "FATAL: extracted rootfs missing /$required" >&2
+    exit 1
+  }
+done
+printf 'PASS: real JZ08 Android Sparse decoded and all SquashFS entries extracted\nsource_sha256=%s\nexpanded_bytes=%s\nflash_allowed=false\n' \
   "$(sha256sum "$ROOTFS_IMAGE" | cut -d' ' -f1)" \
   "$(stat -c '%s' "$ROOTFS_RAW")" \
   > "$ROOT/output/JZ08_ROOTFS_CONTENTS_STATUS.txt"
 cat "$ROOT/output/JZ08_ROOTFS_CONTENTS_STATUS.txt"
-rm -f "$ROOTFS_RAW"
+sudo -n rm -rf -- "$ROOTFS_EXTRACT"
+rm -f -- "$ROOTFS_RAW"
 trap - EXIT
 printf 'JZ08_BUILD_VALIDATED_HARDWARE_UNVERIFIED\n%s\n%s\n' "$PIN_UP" "$PIN_OW" > "$ROOT/output/JZ08_DEVELOPMENT_BUILD_STATUS.txt"
 # Keep diagnostic manifests only; images are excluded on purpose.
