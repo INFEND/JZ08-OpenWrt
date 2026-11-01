@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "ci"))
 from verify_jz08_bundle import (REQUIRED, verify, require_matching_rootfs_audit,
                                 require_kernel_appended_dtb, require_embedded_initramfs,
-                                require_ram_only_cmdline)
+                                require_ram_only_cmdline,
+                                require_observed_service_files)
 
 
 def synthetic_arm64_image():
@@ -235,6 +236,27 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "external SHA256"):
             verify(self.archive, self.sha, self.report, inspect_payloads=False)
 
+
+    def test_required_services_cannot_be_directory_placeholders(self):
+        names = ("/sbin/procd", "/usr/sbin/uhttpd",
+                 "/usr/sbin/ModemManager", "/usr/sbin/rmtfs",
+                 "/www/cgi-bin/luci")
+        valid = {"observed_paths_not_boot_proof": {
+            name: {"present": True, "type": "file"} for name in names
+        }}
+        require_observed_service_files(valid)
+        for name in names:
+            for kind in ("directory", "missing"):
+                with self.subTest(service=name, kind=kind):
+                    changed = {"observed_paths_not_boot_proof": {
+                        key: dict(value)
+                        for key, value in valid["observed_paths_not_boot_proof"].items()
+                    }}
+                    changed["observed_paths_not_boot_proof"][name] = {
+                        "present": kind != "missing", "type": kind
+                    }
+                    with self.assertRaisesRegex(ValueError, "not a regular file"):
+                        require_observed_service_files(changed)
 
     def test_independent_rootfs_audit_must_match_actual_bytes(self):
         actual = {
