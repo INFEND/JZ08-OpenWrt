@@ -190,36 +190,8 @@ def capture_usb(nonce):
             except ValueError:pass
     return {'descriptor_verified':True,'report_complete':False,'error':'PyUSB capture unavailable; descriptor proof retained'}
 def capture_http(nonce):
-    # Select only a network interface beneath the device carrying this nonce.
-    code='''import json,subprocess,time,urllib.request
-from pathlib import Path
-nonce=NONCE
-interfaces=[]
-for p in Path('/sys/bus/usb/devices').glob('*'):
- try:
-  if (p/'serial').read_text().strip()=='JZ08-OW1-'+nonce:
-   interfaces.extend(n.name for n in p.glob('*/net/*'))
- except OSError:pass
-interfaces=sorted(set(interfaces))
-result={'descriptor_verified':True,'report_complete':False,'luci_http_verified':False}
-if len(interfaces)==1:
- iface=interfaces[0]
- subprocess.run(['ip','link','set',iface,'up'],check=True,capture_output=True)
- subprocess.run(['ip','addr','replace','192.168.73.2/24','dev',iface],check=True,capture_output=True)
- opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
- for attempt in range(10):
-  try:
-   text=opener.open('http://192.168.73.1/jz08/proof.txt',timeout=3).read(131072).decode()
-   if 'BEGIN '+nonce in text and 'END '+nonce in text and 'OPENWRT_RELEASE=' in text:
-    result.update(text=text,report_complete=True)
-    html=opener.open('http://192.168.73.1/cgi-bin/luci/',timeout=3).read(131072).decode(errors='replace')
-    result['luci_http_verified']='luci' in html.lower() and '<html' in html.lower()
-    break
-  except Exception as ex:result['error']=str(ex)
-  time.sleep(2)
-else:result['error']='Android USB network interface unavailable; nonce proof retained'
-print(json.dumps(result))
-'''.replace('NONCE',repr(nonce))
+    code=('import sys,json;sys.path.insert(0,'+repr(str(PACKAGE))+');'
+          'from httpcheck import inspect;print(json.dumps(inspect('+repr(nonce)+')))')
     r=runroot([sys.executable,'-c',code],65)
     if r.returncode==0:
         try:return json.loads(r.stdout)

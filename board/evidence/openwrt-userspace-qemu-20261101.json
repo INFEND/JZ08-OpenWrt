@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-01",
+  "emulator": "QEMU virt Cortex-A53 4 vCPUs 256 MiB",
+  "test_kernel": "6.12.0-xarkon-jz08-v37",
+  "release_kernel": "6.12.58",
+  "test_scope": "userspace entry, procd/ubus and direct LuCI CGI; not release-driver ABI or hardware",
+  "init_entry_executed": true,
+  "openwrt_procd_started": true,
+  "ubus_system_board_answered": true,
+  "russian_luci_login_cgi_executed": true,
+  "luci_login_http_status": 403,
+  "luci_login_header": "x-luci-login-required: yes",
+  "jz08_hardware_tested": false,
+  "release_drivers_tested": false,
+  "emmc_present_in_emulator": false,
+  "limitations": [
+    "test kernel lacks release kernel namespaces/inotify/flock; some services fail in this emulator",
+    "release module ABI is retained from one producer, but cannot be loaded by this separate test kernel",
+    "USB radio LCD and persistent boot chain not tested"
+  ]
+}

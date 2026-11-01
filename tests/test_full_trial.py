@@ -1,11 +1,12 @@
 """Regression tests for actual LK2ND placement and full-rootfs edits."""
-import gzip,struct,sys,unittest
+import gzip,struct,sys,unittest,urllib.error,io
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/termux'))
 from bootlib import boot_image
 from cpio import entries,rewrite,credentials
+from httpcheck import fetch_luci
 
 def cpio_one():
     name=b'init\0';body=b'original'
@@ -43,5 +44,14 @@ class FullTrial(unittest.TestCase):
         k=bytearray(8192);k[56:60]=b'ARMd';struct.pack_into('<QQ',k,8,0,16384)
         with self.assertRaisesRegex(ValueError,'RAM'):
             boot_image(k,b'ram',b'dtb','a'*32,[(0x80000000,32*1024**2)])
+    def test_luci_login_403_is_a_real_page_but_generic_403_is_not(self):
+        class Opener:
+            def __init__(self,headers,body):self.headers=headers;self.body=body
+            def open(self,url,timeout):
+                raise urllib.error.HTTPError(url,403,'Forbidden',self.headers,io.BytesIO(self.body))
+        page=b'<html lang="ru"><title>INFEND - LuCI</title></html>'
+        result=fetch_luci(Opener({'x-luci-login-required':'yes'},page),'http://example.invalid')
+        self.assertTrue(result['luci_http_verified']);self.assertTrue(result['luci_russian_verified'])
+        self.assertFalse(fetch_luci(Opener({},page),'http://example.invalid')['luci_http_verified'])
 
 if __name__=='__main__':unittest.main()
