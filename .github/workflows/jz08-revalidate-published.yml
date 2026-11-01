@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/jz08-revalidate-published.yml
       - ci/verify_jz08_bundle.py
+      - ci/audit_jz08_fdt.py
+      - tests/test_fdt_identity.py
       - ci/audit_initramfs_cpio.py
       - ci/check_built_jz08.py
       - tests/test_bundle_verifier.py
