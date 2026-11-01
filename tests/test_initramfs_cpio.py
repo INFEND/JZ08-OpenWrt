@@ -101,6 +101,24 @@ class InitramfsAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "symlink loop"):
             cpio.audit(self.path)
 
+    def test_nonzero_payload_after_trailer_rejected(self):
+        self.write()
+        hidden = newc("hidden", b"payload") + newc("TRAILER!!!", b"", mode=0)
+        self.path.write_bytes(self.path.read_bytes() + hidden)
+        with self.assertRaisesRegex(ValueError, "nonzero data after cpio trailer"):
+            cpio.audit(self.path)
+
+    def test_zero_padding_after_trailer_accepted(self):
+        self.write()
+        self.path.write_bytes(self.path.read_bytes() + bytes(512))
+        self.assertEqual(cpio.audit(self.path)["entries"], len(cpio.REQUIRED))
+
+    def test_embedded_nul_in_filename_rejected(self):
+        self.write()
+        self.path.write_bytes(newc("hidden\x00shadow") + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "invalid cpio filename"):
+            cpio.audit(self.path)
+
     def test_invalid_magic_fails(self):
         self.write()
         self.path.write_bytes(b"BADBAD" + self.path.read_bytes()[6:])

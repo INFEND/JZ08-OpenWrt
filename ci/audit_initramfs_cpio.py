@@ -85,7 +85,8 @@ def audit(path):
             if not 1 <= namesize <= 4096 or filesize > total:
                 raise ValueError("invalid cpio member size")
             raw_name = stream.read(namesize)
-            if len(raw_name) != namesize or not raw_name.endswith(b"\x00"):
+            if (len(raw_name) != namesize or not raw_name.endswith(b"\x00")
+                    or b"\x00" in raw_name[:-1]):
                 raise ValueError("invalid cpio filename")
             try:
                 name = raw_name[:-1].decode("utf-8")
@@ -98,6 +99,15 @@ def audit(path):
             if name == "TRAILER!!!":
                 if filesize != 0:
                     raise ValueError("invalid cpio trailer")
+                # Linux accepts zero padding after the final newc trailer,
+                # but a second archive or hidden nonzero payload must not
+                # evade the published initramfs content audit.
+                stream.seek(align4(data_end))
+                if stream.tell() > total:
+                    raise ValueError("invalid cpio trailer padding")
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    if chunk.strip(b"\x00"):
+                        raise ValueError("nonzero data after cpio trailer")
                 break
             if name.startswith("./"):
                 name = name[2:]
