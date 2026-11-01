@@ -170,6 +170,22 @@ def require_matching_rootfs_audit(actual, claimed):
                 "published runtime audit differs from extracted system.img: " + field)
 
 
+def require_observed_service_files(runtime):
+    """Require actual regular files, not directories named after services.
+
+    The rootfs auditor's 'present' field is true for directories too.
+    A manifest or directory named ModemManager/rmtfs is not a working
+    executable. This remains an offline structural check, not boot proof.
+    """
+    observed = runtime.get("observed_paths_not_boot_proof", {})
+    for name in ("/sbin/procd", "/usr/sbin/uhttpd",
+                 "/usr/sbin/ModemManager", "/usr/sbin/rmtfs",
+                 "/www/cgi-bin/luci"):
+        entry = observed.get(name, {})
+        require(entry.get("present") is True and entry.get("type") == "file",
+                "published rootfs service is not a regular file: " + name)
+
+
 def verify_actual_rootfs(system_image, claimed_runtime):
     """Re-extract the PUBLISHED system.img, never trusting its audit alone.
 
@@ -356,11 +372,7 @@ def verify_real_payloads(zf):
                 and all(row.get("valid") is True and row.get("size", 0) > 0
                         for row in runtime["required_assets"].values()),
                 "published runtime audit does not confirm AArch64 and Russian LuCI")
-        require(all(runtime.get("observed_paths_not_boot_proof", {}).get(name, {}).get("present") is True
-                    for name in ("/sbin/procd", "/usr/sbin/uhttpd",
-                                 "/usr/sbin/ModemManager", "/usr/sbin/rmtfs",
-                                 "/www/cgi-bin/luci")),
-                "published runtime audit lacks required services")
+        require_observed_service_files(runtime)
         verify_actual_rootfs(system, runtime)
     return "INDEPENDENT_REAL_PAYLOAD_AND_ROOTFS_CONTENT_VERIFIED_NOT_BOOT_PROOF"
 
