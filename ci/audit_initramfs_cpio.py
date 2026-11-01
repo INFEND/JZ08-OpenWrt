@@ -71,6 +71,12 @@ def require_real_required_members(records):
 
 
 def reject_known_storage_mutators(records):
+    # Startup directory aliases can hide services under unrelated CPIO paths.
+    # OpenWrt expects literal /etc and /etc/rc.d directories, never symlinks.
+    for directory in ("etc", "etc/rc.d"):
+        entry = records.get(directory)
+        if entry and (entry["mode"] & TYPE_MASK) == SYMLINK:
+            raise ValueError("unsafe startup directory symlink in initramfs: " + directory)
     for name in FORBIDDEN_FILES:
         # Parent directories may themselves be symlinks (for example,
         # lib/preinit -> /unsafe-preinit). Inspect the resolved path, not

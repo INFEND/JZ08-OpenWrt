@@ -186,6 +186,16 @@ class InitramfsAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsafe OEM storage component"):
             cpio.audit(self.path)
 
+    def test_rc_directory_symlink_cannot_hide_unsafe_autostart(self):
+        self.write()
+        hidden = (
+            newc("etc/rc.d", b"/shadow-rc", mode=0o120777)
+            + newc("shadow-rc/S11fstab", b"../init.d/fstab", mode=0o120777)
+        )
+        self.path.write_bytes(hidden + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "unsafe startup directory symlink"):
+            cpio.audit(self.path)
+
     def test_single_leading_dot_prefix_remains_accepted(self):
         self.write()
         self.path.write_bytes(newc("./extra-safe-file") + self.path.read_bytes())

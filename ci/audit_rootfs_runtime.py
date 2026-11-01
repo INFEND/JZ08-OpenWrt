@@ -165,7 +165,13 @@ def audit(root: Path):
                 errors.append("unsafe OEM storage component in rootfs: " + logical)
         except (OSError, ValueError) as exc:
             errors.append(logical + ": " + str(exc))
-    for path in (root / "etc/rc.d").glob("S[0-9][0-9]*"):
+    try:
+        rc_dir = resolve_rootfs(root, "/etc/rc.d")
+        startup_links = list(rc_dir.glob("S[0-9][0-9]*")) if rc_dir.is_dir() else []
+    except (OSError, ValueError) as exc:
+        errors.append("unsafe startup directory: " + str(exc))
+        startup_links = []
+    for path in startup_links:
         name = path.name[3:]
         try:
             target = os.readlink(path).rsplit("/", 1)[-1] if path.is_symlink() else ""
@@ -175,7 +181,8 @@ def audit(root: Path):
             errors.append(path.name + ": " + str(exc))
     return {
         "known_storage_mutators_absent": not any(
-            error.startswith("unsafe OEM") for error in errors),
+            error.startswith(("unsafe OEM", "unsafe unverified hardware/storage"))
+            for error in errors),
         "status": "OFFLINE_USERSPACE_CHECK_PASS_ONLY" if not errors else "REJECTED_USERSPACE",
         "flash_allowed": False,
         "hardware_tested": False,

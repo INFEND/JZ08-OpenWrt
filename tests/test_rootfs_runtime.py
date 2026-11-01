@@ -118,6 +118,7 @@ class RootfsRuntimeAudit(unittest.TestCase):
                 link.symlink_to(f"../init.d/{service}")
                 report = audit_module.audit(self.root)
                 self.assertEqual(report["status"], "REJECTED_USERSPACE")
+                self.assertFalse(report["known_storage_mutators_absent"])
                 self.assertTrue(any("unsafe unverified hardware/storage service autostart" in e
                                     for e in report["errors"]))
                 link.unlink()
