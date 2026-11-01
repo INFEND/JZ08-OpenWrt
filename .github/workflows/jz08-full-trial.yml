@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event_name == 'workflow_run' && 'main' || github.sha }}
       - name: Check source and the boot/memory/CPIO regressions
         run: |
           python3 ci/validate.py

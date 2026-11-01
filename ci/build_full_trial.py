@@ -4,7 +4,7 @@
 The complete runtime trial never installs the unconfigured system.img.
 Input producer bytes and hashes remain in the output as provenance.
 """
-import argparse,gzip,hashlib,json,struct,sys,zipfile,zlib
+import argparse,gzip,hashlib,json,struct,sys,zipfile,zlib,subprocess
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -101,6 +101,8 @@ def assemble(archive,init,output):
             'driver_abi':'same producer kernel and module files','runtime_proof':'fresh nonce + USB + HTTP',
             'system_image':'unconfigured source artifact; never installed by this tool'}
     record['bundle_version']=2
+    record['packager_source_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
+    record['packager_tracked_source_dirty']=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=no'],cwd=ROOT,text=True).strip())
     record['memory_fixup_contract']='live verified SMEM version; 32-bit root/reserved-memory/ranges for version 0'
     record['init_heartbeat']='legacy USB gadget loaded by PID 1 before rcS'
     # Keep build metadata and the manifest in sync with the final record.

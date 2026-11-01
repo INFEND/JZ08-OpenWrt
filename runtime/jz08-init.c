@@ -57,6 +57,14 @@ int main(int argc,char **argv) {
     char *p=strstr(cmd,"xarkon.nonce=");
     if(p){p+=13;if(strspn(p,"0123456789abcdef")==32)memcpy(nonce,p,32);}
     if(!nonce[0])return 4;
+    /* Finite recovery return even if USB service setup fails. */
+    pid_t timer=fork();
+    if(timer<0)return 9;
+    if(timer==0){
+        close(0);close(1);close(2);sleep(600);
+        syscall(SYS_reboot,LINUX_REBOOT_MAGIC1,LINUX_REBOOT_MAGIC2,
+                LINUX_REBOOT_CMD_RESTART2,"recovery");_exit(1);
+    }
     f=fopen("/jz08-init-proof.txt","w");if(!f)return 5;
     fprintf(f,"BEGIN %s\nINIT=INFEND_JZ08_FULL_OPENWRT\n",nonce);
     printf("INFEND_JZ08_INIT_REACHED %s\n",nonce);fflush(stdout);
@@ -90,14 +98,6 @@ int main(int argc,char **argv) {
     /* Original OpenWrt /init copies rootfs onto tmpfs before procd jails.
      * Detach only our pseudo mounts before it copies the directory tree. */
     if(umount("/sys") || umount("/proc"))return 6;
-    /* Finite recovery return even if USB service setup fails. */
-    pid_t timer=fork();
-    if(timer<0)return 9;
-    if(timer==0){
-        close(0);close(1);close(2);sleep(600);
-        syscall(SYS_reboot,LINUX_REBOOT_MAGIC1,LINUX_REBOOT_MAGIC2,
-                LINUX_REBOOT_CMD_RESTART2,"recovery");_exit(1);
-    }
     setenv("INITRAMFS","1",1);
     execl("/init.openwrt","/init.openwrt",(char *)NULL);
     return 7;
