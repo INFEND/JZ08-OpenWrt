@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""INFEND JZ08 full OpenWrt trial v1, exact preflight and recovery restoration."""
+"""INFEND JZ08 full OpenWrt trial v2, exact preflight and recovery restoration."""
 import argparse, datetime, hashlib, json, os, re, secrets, shlex, shutil, struct, subprocess, sys, time, zipfile
 from pathlib import Path
 from bootlib import FDT, boot_image
@@ -277,9 +277,13 @@ def main(args):
         STATE['oem_ram_banks']=[{'address':hex(a),'bytes':n} for a,n in banks]
         from lkprobe import memory_table_version,parse_read_word
         def read_word(address):
+            require(any(a<=address and address+4<=a+n for a,n in banks),'Адрес LK2ND contract вне подтверждённой RAM; STOP')
             r=fb(['oem','debug','readl',hex(address)])
+            FILES['lk2nd-ram-contract.txt']=FILES.get('lk2nd-ram-contract.txt','')+hex(address)+'\n'+redact(r.stdout+r.stderr)+'\n'
             require(r.returncode==0,'Не прочитан LK2ND RAM fixup contract; RAM-запуск остановлен')
-            return parse_read_word(r.stdout+r.stderr)
+            value=parse_read_word(r.stdout+r.stderr)
+            STATE.setdefault('lk2nd_contract_reads',[]).append({'address':hex(address),'value':hex(value)})
+            return value
         version=memory_table_version(read_word)
         dt=FDT(read('bin/jz08.dtb'))
         if version==0:dt.use_32bit_root()
@@ -320,7 +324,7 @@ def report():
         STATE['events']=EVENTS;out=REPORTS/('INFEND_JZ08_OPENWRT_REPORT_'+STAMP+'.zip')
         with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
             z.writestr('RESULT.json',redact(json.dumps(STATE,ensure_ascii=False,indent=2)))
-            z.writestr('ОТЧЁТ.txt','INFEND JZ08 / OpenWrt v1\nСТАТУС: '+STATE['status']+'\n\n'+'\n'.join(e['text'] for e in EVENTS))
+            z.writestr('ОТЧЁТ.txt','INFEND JZ08 / OpenWrt v2\nСТАТУС: '+STATE['status']+'\n\n'+'\n'.join(e['text'] for e in EVENTS))
             for name,body in FILES.items():z.writestr(name,redact(body))
         say('Один итоговый ZIP-отчёт: '+str(out),'OK')
     except Exception as ex:print('Не удалось сохранить отчёт:',ex,flush=True)
