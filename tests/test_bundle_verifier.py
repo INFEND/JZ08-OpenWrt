@@ -15,6 +15,12 @@ from verify_jz08_bundle import (REQUIRED, verify, require_matching_rootfs_audit,
                                 require_ram_only_cmdline)
 
 
+def synthetic_arm64_image():
+    image = bytearray(b"K" * 8192)
+    image[56:60] = b"ARM\x64"
+    return bytes(image)
+
+
 class IndependentBundleVerificationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -109,7 +115,7 @@ class IndependentBundleVerificationTests(unittest.TestCase):
     def test_kernel_payload_has_exact_appended_board_dtb(self):
         kernel = Path(self.tmp.name) / "kernel.bin"
         board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
-        kernel.write_bytes(gzip.compress(b"K" * 8192) + board_dtb)
+        kernel.write_bytes(gzip.compress(synthetic_arm64_image()) + board_dtb)
         result = require_kernel_appended_dtb(kernel, board_dtb)
         self.assertEqual(result["appended_jz08_dtb_bytes"], len(board_dtb))
         self.assertEqual(result["gzip_uncompressed_bytes"], 8192)
@@ -119,14 +125,21 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
         for trailer in (b"", b"WRONG", board_dtb + b"EXTRA"):
             with self.subTest(trailer=trailer):
-                kernel.write_bytes(gzip.compress(b"K" * 8192) + trailer)
+                kernel.write_bytes(gzip.compress(synthetic_arm64_image()) + trailer)
                 with self.assertRaisesRegex(ValueError, "exact published JZ08 DTB"):
                     require_kernel_appended_dtb(kernel, board_dtb)
+
+    def test_kernel_payload_rejects_non_arm64_image_even_with_correct_dtb(self):
+        kernel = Path(self.tmp.name) / "kernel.bin"
+        board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
+        kernel.write_bytes(gzip.compress(b"K" * 8192) + board_dtb)
+        with self.assertRaisesRegex(ValueError, "ARM64 Image header"):
+            require_kernel_appended_dtb(kernel, board_dtb)
 
     def test_kernel_payload_rejects_corrupt_or_truncated_gzip(self):
         kernel = Path(self.tmp.name) / "kernel.bin"
         board_dtb = bytes.fromhex("d00dfeed") + b"JZ08-BOARD-DTB"
-        kernel.write_bytes(gzip.compress(b"K" * 8192)[:-8] + board_dtb)
+        kernel.write_bytes(gzip.compress(synthetic_arm64_image())[:-8] + board_dtb)
         with self.assertRaises(ValueError):
             require_kernel_appended_dtb(kernel, board_dtb)
 
@@ -156,7 +169,7 @@ class IndependentBundleVerificationTests(unittest.TestCase):
         kernel = Path(self.tmp.name) / "ram-kernel.bin"
         cpio_path = Path(self.tmp.name) / "initrd.cpio"
         cpio_path.write_bytes(b"070701" + b"0" * 104)
-        kernel.write_bytes(gzip.compress(b"K" * 8192)[:-8])
+        kernel.write_bytes(gzip.compress(synthetic_arm64_image())[:-8])
         with self.assertRaisesRegex(ValueError, "incomplete"):
             require_embedded_initramfs(kernel, cpio_path)
 

@@ -51,6 +51,7 @@ def require_kernel_appended_dtb(kernel_path, expected_dtb):
 
     decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
     uncompressed = 0
+    image_prefix = bytearray()
     trailer = bytearray()
     with kernel_path.open("rb") as stream:
         while True:
@@ -66,6 +67,8 @@ def require_kernel_appended_dtb(kernel_path, expected_dtb):
                 raise ValueError(
                     "JZ08 ZIP VERIFICATION FAILED: corrupt kernel gzip: "
                     + str(exc)) from exc
+            if len(image_prefix) < 64:
+                image_prefix.extend(decoded[:64 - len(image_prefix)])
             uncompressed += len(decoded)
             require(uncompressed <= 256 * 1024 * 1024,
                     "kernel gzip expands beyond offline safety limit")
@@ -73,6 +76,11 @@ def require_kernel_appended_dtb(kernel_path, expected_dtb):
                 trailer.extend(decompressor.unused_data)
     require(decompressor.eof and uncompressed > 4096,
             "kernel gzip is incomplete or empty")
+    # Pinned msm89xx target declares KERNELNAME:=Image and ARCH:=aarch64.
+    # Validate the real ARM64 Linux Image magic at header offset 0x38;
+    # a valid gzip stream alone could otherwise contain arbitrary bytes.
+    require(bytes(image_prefix[56:60]) == b"ARM\x64",
+            "kernel gzip does not contain an ARM64 Image header")
     require(bytes(trailer) == expected_dtb,
             "kernel payload does not append the exact published JZ08 DTB")
     return {"gzip_uncompressed_bytes": uncompressed,
