@@ -69,7 +69,10 @@ def require_real_required_members(records):
 
 def reject_known_storage_mutators(records):
     for name in FORBIDDEN_FILES:
-        if name in records:
+        # Parent directories may themselves be symlinks (for example,
+        # lib/preinit -> /unsafe-preinit). Inspect the resolved path, not
+        # only the literal CPIO entry name.
+        if resolve_member(records, name) is not None:
             raise ValueError("unsafe OEM storage component in initramfs: " + name)
     for name, record in records.items():
         if not name.startswith("etc/rc.d/S"):
