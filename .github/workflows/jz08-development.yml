@@ -15,7 +15,8 @@ on:
   workflow_dispatch:
 concurrency:
   group: jz08-development-${{ github.ref }}
-  cancel-in-progress: true
+  # Long kernel/OpenWrt builds must not be discarded by source-audit commits.
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
