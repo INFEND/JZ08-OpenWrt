@@ -295,10 +295,11 @@ def verify_real_payloads(zf):
 
         dtb = paths["images/msm8916-generic-jz08-3000-nkv.dtb"]
         dtb_data = dtb.read_bytes()
-        require(len(dtb_data) >= 1024 and dtb_data[:4] == bytes.fromhex("d00dfeed")
-                and 40 <= int.from_bytes(dtb_data[4:8], "big") <= len(dtb_data)
-                and b"xarkon,jz08-3000-nkv" + bytes([0]) in dtb_data,
-                "compiled DTB does not identify JZ08")
+        # Do not trust a board string merely found in an unused DTB region.
+        # Parse the actual FDT root compatible property and structure.
+        from audit_jz08_fdt import verify_jz08_fdt
+        require(verify_jz08_fdt(dtb_data)["fdt_structure_valid"],
+                "compiled JZ08 DTB failed structural/root identity audit")
         # A separately published DTB is insufficient for this image recipe.
         # Verify the actual gzip payloads carry the same JZ08 DTB bytes.
         require_kernel_appended_dtb(kernel, dtb_data)
