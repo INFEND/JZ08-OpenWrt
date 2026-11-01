@@ -161,6 +161,17 @@ class InitramfsAuditTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unsafe or noncanonical cpio path"):
                     cpio.audit(self.path)
 
+    def test_parent_symlink_cannot_hide_oem_formatter(self):
+        self.write()
+        hidden = (
+            newc("lib/preinit", b"/shadow-preinit", mode=0o120777)
+            + newc("shadow-preinit/79-format-rootfs-data",
+                   b"mkfs.ext4 /dev/mmcblk0p15")
+        )
+        self.path.write_bytes(hidden + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "unsafe OEM storage component"):
+            cpio.audit(self.path)
+
     def test_single_leading_dot_prefix_remains_accepted(self):
         self.write()
         self.path.write_bytes(newc("./extra-safe-file") + self.path.read_bytes())
