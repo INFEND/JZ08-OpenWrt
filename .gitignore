@@ -22,3 +22,7 @@ recovery/
 secrets/
 reports/
 checksums-source.json
+# Audited legacy transport source and the exact previously tested LK2ND only.
+!tools/recovery/
+!tools/recovery/**
+tools/recovery/**/__pycache__/

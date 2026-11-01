@@ -1,0 +1,168 @@
+{
+  "disk_bytes": 3909091328,
+  "sector_bytes": 512,
+  "partitions": [
+    {
+      "index": 1,
+      "name": "modem",
+      "start": 131072,
+      "sectors": 131072
+    },
+    {
+      "index": 2,
+      "name": "sbl1",
+      "start": 262144,
+      "sectors": 1024
+    },
+    {
+      "index": 3,
+      "name": "sbl1bak",
+      "start": 263168,
+      "sectors": 1024
+    },
+    {
+      "index": 4,
+      "name": "aboot",
+      "start": 264192,
+      "sectors": 2048
+    },
+    {
+      "index": 5,
+      "name": "abootbak",
+      "start": 266240,
+      "sectors": 2048
+    },
+    {
+      "index": 6,
+      "name": "rpm",
+      "start": 268288,
+      "sectors": 1024
+    },
+    {
+      "index": 7,
+      "name": "rpmbak",
+      "start": 269312,
+      "sectors": 1024
+    },
+    {
+      "index": 8,
+      "name": "tz",
+      "start": 270336,
+      "sectors": 1024
+    },
+    {
+      "index": 9,
+      "name": "tzbak",
+      "start": 271360,
+      "sectors": 1024
+    },
+    {
+      "index": 10,
+      "name": "hyp",
+      "start": 272384,
+      "sectors": 1024
+    },
+    {
+      "index": 11,
+      "name": "hypbak",
+      "start": 273408,
+      "sectors": 1024
+    },
+    {
+      "index": 12,
+      "name": "pad",
+      "start": 274432,
+      "sectors": 2048
+    },
+    {
+      "index": 13,
+      "name": "modemst1",
+      "start": 276480,
+      "sectors": 3072
+    },
+    {
+      "index": 14,
+      "name": "modemst2",
+      "start": 279552,
+      "sectors": 3072
+    },
+    {
+      "index": 15,
+      "name": "misc",
+      "start": 282624,
+      "sectors": 2048
+    },
+    {
+      "index": 16,
+      "name": "fsc",
+      "start": 284672,
+      "sectors": 2
+    },
+    {
+      "index": 17,
+      "name": "ssd",
+      "start": 284674,
+      "sectors": 16
+    },
+    {
+      "index": 18,
+      "name": "splash",
+      "start": 284690,
+      "sectors": 20480
+    },
+    {
+      "index": 19,
+      "name": "DDR",
+      "start": 393216,
+      "sectors": 64
+    },
+    {
+      "index": 20,
+      "name": "fsg",
+      "start": 393280,
+      "sectors": 3072
+    },
+    {
+      "index": 21,
+      "name": "sec",
+      "start": 396352,
+      "sectors": 32
+    },
+    {
+      "index": 22,
+      "name": "boot",
+      "start": 396384,
+      "sectors": 32768
+    },
+    {
+      "index": 23,
+      "name": "system",
+      "start": 429152,
+      "sectors": 1638400
+    },
+    {
+      "index": 24,
+      "name": "persist",
+      "start": 2067552,
+      "sectors": 65536
+    },
+    {
+      "index": 25,
+      "name": "cache",
+      "start": 2133088,
+      "sectors": 262144
+    },
+    {
+      "index": 26,
+      "name": "recovery",
+      "start": 2395232,
+      "sectors": 32768
+    },
+    {
+      "index": 27,
+      "name": "userdata",
+      "start": 2428000,
+      "sectors": 5206911
+    }
+  ]
+}

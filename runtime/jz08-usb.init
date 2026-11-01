@@ -1,0 +1,29 @@
+#!/bin/sh /etc/rc.common
+START=98
+STOP=10
+
+start() {
+    nonce="$(sed -n 's/.*xarkon.nonce=\([0-9a-f]\{32\}\).*/\1/p' /proc/cmdline)"
+    [ "${#nonce}" = 32 ] || return 1
+    # This exact producer has USB_CONFIGFS disabled. Use its matched legacy
+    # RNDIS/ECM module, with libcomposite and function dependencies available.
+    for m in libcomposite u_ether usb_f_ecm usb_f_ecm_subset usb_f_rndis; do
+        modprobe "$m" || return 1
+    done
+    modprobe g_ether idVendor=0x1d6b idProduct=0x0104 \
+        iSerialNumber="JZ08-OW1-$nonce" iManufacturer=INFEND \
+        iProduct=JZ08_OpenWrt dev_addr=02:73:00:00:00:01 host_addr=02:73:00:00:00:02 || return 1
+    /etc/init.d/network reload
+    # Runtime proof stays on tmpfs and is exposed only on the local USB LAN.
+    mkdir -p /www/jz08
+    {
+        cat /jz08-init-proof.txt
+        echo "OPENWRT_RELEASE=$(cat /etc/openwrt_release | tr '\n' ' ')"
+        echo "KERNEL=$(uname -r)"
+        ubus call system board
+        ubus call network.interface.lan status
+        cat /proc/mounts
+    } > /www/jz08/proof.txt
+    logger -t jz08 "OpenWrt USB runtime started; nonce=$nonce"
+    # The independent PID-1 entry timer returns to recovery after 600 seconds.
+}

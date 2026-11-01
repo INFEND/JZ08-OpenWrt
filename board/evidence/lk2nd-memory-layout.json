@@ -1,0 +1,34 @@
+{
+  "lk2nd_sha256": "e0f260e31c6a681a1fa6e27d2e2e02418c17f726a46225b2348618659345dbae",
+  "lk2nd_bytes": 290832,
+  "lk2nd_code_offset_in_bootimg": 2048,
+  "address_override_function_offset": "0x171a4",
+  "fastboot_call_to_address_override_offset": "0x196fc",
+  "fastboot_ramdisk_memmove_call_offset": "0x198a4",
+  "fastboot_kernel_memmove_call_offset": "0x198b4",
+  "ddr_base_condition": "0x80000000; host runtime requires this in OEM DTB",
+  "dtb_address": "0x81e00000",
+  "initramfs_address": "0x82000000",
+  "v34": {
+    "sha256": "fecae14de3381d5203c5724c1c7120d688253cb21bb94074f11fa7cfec01be47",
+    "file_bytes": 37683712,
+    "image_size": 38535168,
+    "text_offset": 0,
+    "kernel_start": "0x80000000",
+    "file_end_exclusive": "0x823f0200",
+    "image_end_exclusive": "0x824c0000",
+    "overlaps_dtb": true,
+    "overlaps_initramfs": true
+  },
+  "v37": {
+    "sha256": "6372c780059912cf626d61d8c441040891e202d0edcbf27c717b2625e707702f",
+    "file_bytes": 6731784,
+    "image_size": 7012352,
+    "text_offset": 0,
+    "kernel_start": "0x80000000",
+    "file_end_exclusive": "0x8066b808",
+    "image_end_exclusive": "0x806b0000",
+    "overlaps_dtb": false,
+    "overlaps_initramfs": false
+  }
+}

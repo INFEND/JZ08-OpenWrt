@@ -1,0 +1,80 @@
+name: JZ08 complete OpenWrt RAM trial
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/jz08-full-trial.yml
+      - ci/build_full_trial.py
+      - runtime/**
+      - tools/termux/**
+      - tools/recovery/**
+      - tests/test_full_trial.py
+      - docs/FULL_TRIAL_RU.md
+  workflow_run:
+    workflows: [JZ08 development kernel/OpenWrt build (NOT FLASHABLE)]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: jz08-full-trial
+  cancel-in-progress: false
+jobs:
+  full-trial:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Check source and the boot/memory/CPIO regressions
+        run: |
+          python3 ci/validate.py
+          python3 -m unittest discover -s tests -v
+      - name: Select latest successful full producer on main
+        id: producer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          id="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/jz08-development.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')"
+          [[ "$id" =~ ^[0-9]+$ ]]
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE
+          path: producer
+          run-id: ${{ steps.producer.outputs.id }}
+          github-token: ${{ github.token }}
+      - name: Install compiler and independent image readers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu libc6-dev-arm64-cross android-sdk-libsparse-utils squashfs-tools
+      - name: Independently inspect the downloaded complete producer
+        run: |
+          python3 ci/verify_jz08_bundle.py --archive producer/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip --sha256 producer/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip.sha256 --verification producer/JZ08_BUNDLE_VERIFICATION.json > PRODUCER_DEEP_AUDIT.json
+      - name: Compile PID-1 entry and build full single-file Termux bundle
+        run: |
+          mkdir -p output/full-trial
+          aarch64-linux-gnu-gcc -static -Os -Wall -Wextra -Werror -fno-ident -Wl,--build-id=none runtime/jz08-init.c -o output/full-trial/init.arm64
+          python3 ci/build_full_trial.py --archive producer/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip --init output/full-trial/init.arm64 --output output/full-trial
+          python3 output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip --selftest
+          (cd output/full-trial && sha256sum -c INFEND_JZ08_OPENWRT_FULL_TRIAL.zip.sha256)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: INFEND_JZ08_OPENWRT_FULL_TRIAL
+          path: |
+            output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip
+            output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip.sha256
+            output/full-trial/FULL_BUILD.json
+            PRODUCER_DEEP_AUDIT.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish complete experimental RAM kit with an honest status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view full-ram-trial-v1 >/dev/null 2>&1 || gh release create full-ram-trial-v1 --prerelease --title "JZ08 full OpenWrt RAM trial v1 — hardware unverified" --notes-file docs/FULL_TRIAL_RU.md
+          gh release upload full-ram-trial-v1 output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip.sha256 output/full-trial/FULL_BUILD.json --clobber

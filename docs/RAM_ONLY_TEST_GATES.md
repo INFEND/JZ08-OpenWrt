@@ -1,5 +1,22 @@
 # JZ08: offline RAM-only test readiness gates
 
+## Update 2026-11-01: separate complete RAM trial
+
+The old embedded-initramfs candidate discussed below remains blocked. The new
+`jz08-full-trial.yml` pipeline uses the normal 14,682,120-byte ARM64 kernel and
+a separate complete OpenWrt initrd, avoiding the old kernel/DTB/initrd overlap.
+The supplied LK2ND's real address override is documented by disassembly in
+`board/evidence/`. The phone must obtain a positive, bounded OEM memory map
+before packing or sending an image. This is a software gate, not proof of
+successful execution on JZ08. USB uses the producer's matched legacy gadget
+modules because that producer has CONFIG_USB_CONFIGFS disabled.
+
+The full RAM trial has an independent 600-second recovery timer and tests a
+fresh nonce, OpenWrt startup, HTTP LuCI, eMMC geometry and p26 restoration
+separately. Persistent installation remains blocked. See
+[the full trial instructions](FULL_TRIAL_RU.md). The historical gates below
+describe the previous inspection-only candidate.
+
 Status: **NOT FLASHABLE**, **NOT READY FOR HARDWARE RAM-ONLY TEST**.
 
 The 1 November 2026 build [#41289116237](https://github.com/INFEND/JZ08-OpenWrt/actions/runs/41289116237)

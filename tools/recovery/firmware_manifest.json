@@ -1,0 +1,8 @@
+{
+  "lk2nd_sha256": "e0f260e31c6a681a1fa6e27d2e2e02418c17f726a46225b2348618659345dbae",
+  "lk2nd_size": 290832,
+  "v29_source": "XARKON_JZ08_COMPILED_BINARIES_V29_20261029_161115.zip",
+  "recovery_part_bytes": 16777216,
+  "flash_safe": false,
+  "openwrt": false
+}
