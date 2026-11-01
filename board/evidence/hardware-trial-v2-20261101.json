@@ -1,0 +1,37 @@
+{
+  "source_report_sha256": "c0103878f642c33d5841d50cad34987996a7c734b46db5358d5a4c26016636f4",
+  "source_report_version": 2,
+  "status": "LINUX_NOT_VERIFIED",
+  "linux_init_verified": false,
+  "openwrt_runtime_verified": false,
+  "luci_http_verified": false,
+  "live_smem_version": 1,
+  "live_loader_getter_instructions_verified": true,
+  "dtb_root_address_cells": 2,
+  "oem_dtb_ram_bytes": 536870912,
+  "linux_ram_size_verified": false,
+  "fastboot_accepted_bytes": 27281408,
+  "usb_transitions": [
+    {"seconds": 0, "vid_pid": null},
+    {"seconds": 31, "vid_pid": "05c6:9091"},
+    {"seconds": 148, "vid_pid": "05c6:9024"}
+  ],
+  "kernel_log_obtained": false,
+  "recovery_restored_readback": true,
+  "recovery_restore_required": false,
+  "recovery_sha256_after": "8f2e9de8b8e3d26f76784f647655aa70b85ae2de86c5777da2974c2a1ea6a462",
+  "boot_aboot_gpt_rechecked": true,
+  "legacy_adb_observations": {
+    "interface_present_but_devices_list_empty": true,
+    "interface_driver": "usbfs",
+    "termux_adb_executable_process_count": 2,
+    "actual_listening_ports_unknown": true,
+    "helper_exit_zero_was_not_connection_proof": true
+  },
+  "inferences": [
+    "Legacy SMEM version 0 cannot explain this observed device result.",
+    "Qualcomm USB return does not identify the kernel failure or prove /init execution.",
+    "ADB competition is a plausible transport failure, not an established kernel boot cause."
+  ],
+  "privacy": "Only static facts and report hash; no serials, MACs, modem IDs or private report payloads."
+}

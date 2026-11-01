@@ -162,13 +162,8 @@ def usb_snapshot():
  except Exception as e: return 'USB_READ_ERROR:'+repr(e)
 
 def adb_call(*params, timeout=22):
- import shlex,subprocess
- pref=os.environ.get('PREFIX','/data/data/com.termux/files/usr')
- adb=pref+'/bin/adb'
- home='/data/data/com.termux/files/home'
- env='env HOME='+shlex.quote(home)+' TMPDIR='+shlex.quote(pref+'/tmp')+' ADB_LIBUSB=0 ADB_SERVER_PORT=5063 '
- cmd=env+' '.join(shlex.quote(str(x)) for x in (adb,'-P','5063',*params))
- return subprocess.run(['su','-c',cmd],capture_output=True,text=True,timeout=timeout)
+ from adbtransport import recovery_command
+ return recovery_command(params,timeout)
 
 def verified_mifi():
  """Check LIVE adb transport; checking that adb process exists is not enough."""

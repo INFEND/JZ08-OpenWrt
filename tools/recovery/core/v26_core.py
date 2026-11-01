@@ -256,12 +256,11 @@ def load_legacy():
     return m
 
 def native_recover():
-    temp=STAGE/'_legacy_adb_v157.zip';temp.write_bytes(read_pkg('legacy/native_adb_v157.zip'))
-    try:
-        cp=subprocess.run([sys.executable,str(temp),'--watch-seconds','15','--no-color'],capture_output=True,text=True,timeout=100)
-        R['native_adb_last_lines']=cp.stdout.splitlines()[-12:]
-        guard(cp.returncode==0,'Native ADB v15.7 обнаружил MIFI')
-    finally:temp.unlink(missing_ok=True)
+    from adbtransport import recovery_connect
+    notes=[];session=recovery_connect(notes)
+    R['adb_servers']=notes[-15:]
+    guard(session is not None,'Подтверждён живой ADB MIFI, MSM8916 и JZ_MIFI_LCD')
+    R['adb_server_port']=session.server.port
 
 def enter_edl(leg):
     guard(shutil.which('su') is not None,'Magisk su доступен')
@@ -386,13 +385,8 @@ def test_recovery():
     expected=R.get('candidate_meta',{}).get('sha256')
     if expected:guard(hdisk(CAND)==expected,'Образ на телефоне готов к проверке')
     native_recover()
-    pref=os.environ.get('PREFIX','/data/data/com.termux/files/usr')
-    adb=pref+'/bin/adb'
-    home='/data/data/com.termux/files/home'
-    env='env HOME='+shlex.quote(home)+' TMPDIR='+shlex.quote(pref+'/tmp')+' ADB_LIBUSB=0 ADB_SERVER_PORT=5063 '
     def call(*params):
-        cmd=env+' '.join(shlex.quote(x) for x in (adb,'-P','5063',*params))
-        return subprocess.run(['su','-c',cmd],capture_output=True,text=True,timeout=28)
+        return adb_command(*params,timeout=28)
     cp=call('devices','-l')
     lines=[x for x in cp.stdout.splitlines() if re.match(r'^\S+\s+device\b',x)]
     guard(len(lines)==1 and 'model:MIFI' in lines[0] and 'product:MIFI' in lines[0], 'Единственный Native ADB MIFI подтверждён')
@@ -408,12 +402,8 @@ def test_recovery():
 
 MARKER='/cache/XARKON_JZ08_V26_INIT_OK.txt'
 def adb_command(*args,timeout=32):
-    import shlex
-    pref=os.environ.get('PREFIX','/data/data/com.termux/files/usr')
-    adb=pref+'/bin/adb';home='/data/data/com.termux/files/home'
-    env='env HOME='+shlex.quote(home)+' TMPDIR='+shlex.quote(pref+'/tmp')+' ADB_LIBUSB=0 ADB_SERVER_PORT=5063 '
-    cmd=env+' '.join(shlex.quote(x) for x in (adb,'-P','5063',*args))
-    return subprocess.run(['su','-c',cmd],capture_output=True,text=True,timeout=timeout)
+    from adbtransport import recovery_command
+    return recovery_command(args,timeout)
 def marker_check(fresh=False):
     R['mode']='CHECK_BOOT_MARKER'
     native_recover()

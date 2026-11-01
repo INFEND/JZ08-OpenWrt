@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""INFEND JZ08 full OpenWrt trial v2, exact preflight and recovery restoration."""
+"""INFEND JZ08 full OpenWrt trial v3, exact preflight and recovery restoration."""
 import argparse, datetime, hashlib, json, os, re, secrets, shlex, shutil, struct, subprocess, sys, time, zipfile
 from pathlib import Path
 from bootlib import FDT, boot_image
@@ -13,7 +13,7 @@ STAGE=ROOT/'INFEND_JZ08_OPENWRT'
 REPORTS=ROOT/'XARKON_JZ08_REPORTS'
 PACKAGE=Path(sys.argv[0]).resolve()
 EXPECTED_SERIAL=None
-EVENTS=[];FILES={};STATE={'version':2,'runtime_kind':'full-openwrt','status':'START','linux_init_verified':False,'emmc_read_verified':False,
+EVENTS=[];FILES={};STATE={'version':3,'runtime_kind':'full-openwrt','status':'START','linux_init_verified':False,'emmc_read_verified':False,
                          'openwrt_installed':False,'full_system_flash_allowed':False,'hardware_test_in_this_environment':False,'openwrt_runtime_verified':False,'luci_http_verified':False}
 def say(message,kind='INFO'):
     EVENTS.append({'time':datetime.datetime.now().isoformat(timespec='seconds'),'kind':kind,'text':message})
@@ -40,7 +40,7 @@ def package_check():
     STATE['package_integrity']=True
     say('Целостность ядра, initramfs, DTB и исходников подтверждена','OK')
 def runroot(argv,timeout=30):
-    env=['env','PATH='+str(PREFIX/'bin')+':/system/bin:/system/xbin','LD_LIBRARY_PATH='+str(PREFIX/'lib'),
+    env=['env','HOME=/data/data/com.termux/files/home','PATH='+str(PREFIX/'bin')+':/system/bin:/system/xbin','LD_LIBRARY_PATH='+str(PREFIX/'lib'),
          'TMPDIR='+str(PREFIX/'tmp'),'ADB_LIBUSB=0','ADB_SERVER_PORT=5063']
     cmd=' '.join(shlex.quote(str(x)) for x in env+list(argv))
     return subprocess.run(['su','-c',cmd],capture_output=True,text=True,errors='replace',timeout=timeout)
@@ -197,9 +197,20 @@ def capture_http(nonce):
         try:return json.loads(r.stdout)
         except ValueError:pass
     return {'descriptor_verified':True,'report_complete':False,'error':'USB HTTP read unavailable'}
+def capture_android(label,start=False):
+    r=runroot([sys.executable,str(PACKAGE),'--android-read','start' if start else 'existing'],85)
+    try:result=json.loads(r.stdout) if r.returncode==0 else {'available':False,'error':'Android reader failed'}
+    except ValueError:result={'available':False,'error':'Invalid Android reader response'}
+    post=result.pop('postmortem',None)
+    if post:
+        FILES['android-'+label+'.txt']=redact(post.pop('log'))
+        result['postmortem']=post
+    # Keep failed probes visible without growing an unbounded report.
+    STATE.setdefault('android_probes',{})[label]=result
+    return result
 def observe(nonce,seconds=720):
-    from postmortem import USB_CODE,stock_android
-    end=time.monotonic()+seconds;last=-1;captured=False;previous_usb=None
+    from postmortem import USB_CODE
+    end=time.monotonic()+seconds;last=-1;captured=False;previous_usb=None;last_android=-30
     while time.monotonic()<end:
         elapsed=int(seconds-(end-time.monotonic()))
         if elapsed//10>last:last=elapsed//10;say(f'Ожидание Linux / USB: {elapsed} с')
@@ -210,15 +221,14 @@ def observe(nonce,seconds=720):
             previous_usb=usb
             STATE.setdefault('usb_transitions',[]).append({'elapsed_seconds':elapsed,'devices':usb})
             say('USB: '+(', '.join(d['vid']+':'+d['pid'] for d in usb) or 'цель не видна'))
-        if elapsed>5 and any(d['vid']=='05c6' and d['pid'] in ('9024','9091') for d in usb):
-            def adb(arguments,timeout):return runroot([str(PREFIX/'bin/adb'),'-P','5063']+arguments,timeout)
-            try:post=stock_android(adb)
+        if elapsed>5 and elapsed-last_android>=20 and any(d['vid']=='05c6' and d['pid'] in ('9024','9091') for d in usb):
+            last_android=elapsed
+            try:post=capture_android('after')
             except Exception as ex:
                 STATE['android_probe_error']=str(ex);post=None
-            if post:
-                FILES['android-postmortem.txt']=redact(post.pop('log'))
+            if post and post.get('available'):
                 STATE['returned_to_stock_android']=post
-                if 'INFEND_JZ08_INIT_REACHED '+nonce in FILES['android-postmortem.txt']:
+                if 'INFEND_JZ08_INIT_REACHED '+nonce in FILES.get('android-after.txt',''):
                     STATE['linux_init_verified']=True;STATE['proof_channel']='Android retained log + fresh init nonce'
                 say('Подтверждён возврат штатного Android. Сохраняю журналы и завершаю ожидание.','WARN')
                 return
@@ -257,6 +267,13 @@ def main(args):
         restore();STATE['status']='FACTORY_RECOVERY_RESTORED';return
     if args.report:
         STATE['status']='REPORT_ONLY';return
+    if args.postmortem:
+        say('Читаю доступные журналы штатного JZ08 через уже работающий ADB; без перезагрузки')
+        post=capture_android('current',start=True)
+        STATE['status']='STOCK_ANDROID_DIAGNOSTICS_CAPTURED' if post.get('available') else 'STOCK_ANDROID_ADB_UNAVAILABLE'
+        say('Чтение JZ08 завершено; доступность каждого журнала указана в отчёте' if post.get('available') else 'Живой ADB JZ08 не подтверждён; сведения о серверах сохранены',
+            'OK' if post.get('available') else 'WARN')
+        return
     if args.verify:
         last=STAGE/'last-run.json';require(last.is_file(),'Нет nonce предыдущего запуска OpenWrt')
         nonce=json.loads(last.read_text())['nonce'];observe(nonce,25)
@@ -269,6 +286,9 @@ def main(args):
     try:
         if not connected():
             require(args.ram_test,'Для --boot-only нужен уже работающий LK2ND')
+            say('Проверяю живой ADB до изменения recovery и сохраняю исходные журналы')
+            baseline=capture_android('before',start=True)
+            require(baseline.get('available'),'ADB JZ08 не подтверждён до испытания; recovery не изменён. Сведения сохранены в отчёт.')
             say('Временная запись только recovery p26 (16 МиБ), затем RAM-загрузка и возврат заводского recovery. При потере USB автоматический возврат может потребовать ручного перезапуска.','WARN')
             changed=True;STATE['recovery_restore_required']=True
             legacy('--cycle')
@@ -324,7 +344,7 @@ def report():
         STATE['events']=EVENTS;out=REPORTS/('INFEND_JZ08_OPENWRT_REPORT_'+STAMP+'.zip')
         with zipfile.ZipFile(out,'w',zipfile.ZIP_DEFLATED) as z:
             z.writestr('RESULT.json',redact(json.dumps(STATE,ensure_ascii=False,indent=2)))
-            z.writestr('ОТЧЁТ.txt','INFEND JZ08 / OpenWrt v2\nСТАТУС: '+STATE['status']+'\n\n'+'\n'.join(e['text'] for e in EVENTS))
+            z.writestr('ОТЧЁТ.txt','INFEND JZ08 / OpenWrt v3\nСТАТУС: '+STATE['status']+'\n\n'+'\n'.join(e['text'] for e in EVENTS))
             for name,body in FILES.items():z.writestr(name,redact(body))
         say('Один итоговый ZIP-отчёт: '+str(out),'OK')
     except Exception as ex:print('Не удалось сохранить отчёт:',ex,flush=True)
@@ -332,9 +352,16 @@ def report():
 if __name__=='__main__':
     ap=argparse.ArgumentParser(description='INFEND JZ08 / полный OpenWrt RAM-комплект / аппаратная проверка не выполнена')
     mode=ap.add_mutually_exclusive_group()
-    for flag in ('prepare','ram-test','boot-only','verify','restore','report','flash','selftest'):mode.add_argument('--'+flag,action='store_true')
+    for flag in ('prepare','ram-test','boot-only','verify','restore','report','postmortem','flash','selftest'):mode.add_argument('--'+flag,action='store_true')
     mode.add_argument('--usb-read',metavar='NONCE',help=argparse.SUPPRESS)
+    mode.add_argument('--android-read',choices=('existing','start'),help=argparse.SUPPRESS)
     args=ap.parse_args()
+    if args.android_read:
+        try:
+            from postmortem import capture_existing
+            print(json.dumps(capture_existing(start=args.android_read=='start')));sys.exit(0)
+        except Exception:
+            print(json.dumps({'available':False,'error':'Android transport probe failed'}));sys.exit(2)
     if args.usb_read:
         try:
             from usbproof import capture
@@ -347,5 +374,5 @@ if __name__=='__main__':
     except Exception as ex:
         STATE['status']='FAILED';STATE['error']=str(ex);say(str(ex),'ERROR');rc=2
     finally:report()
-    if STATE.get('recovery_restore_required') or STATE['status']=='LINUX_NOT_VERIFIED':rc=3
+    if STATE.get('recovery_restore_required') or STATE['status'] in ('LINUX_NOT_VERIFIED','STOCK_ANDROID_ADB_UNAVAILABLE'):rc=3
     sys.exit(rc)

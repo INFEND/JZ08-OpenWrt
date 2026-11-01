@@ -92,6 +92,7 @@ def assemble(archive,init,output):
     with zipfile.ZipFile(rec,'w',zipfile.ZIP_DEFLATED) as z:
         for p in sorted((ROOT/'tools/recovery').rglob('*')):
             if p.is_file() and '__pycache__' not in p.parts:z.writestr(p.relative_to(ROOT/'tools/recovery').as_posix(),p.read_bytes())
+        z.writestr('adbtransport.py',(ROOT/'tools/termux/adbtransport.py').read_bytes())
     assets['legacy/v32-guarded.zip']=rec.getvalue()
     record={'status':'FULL_OPENWRT_RAM_TRIAL_BUILT','producer_archive_sha256':sha(archive.read_bytes()),
             'hardware_tested':False,'persistent_install_allowed':False,
@@ -100,15 +101,17 @@ def assemble(archive,init,output):
             'memory_size_source':'live OEM DTB, never guessed','disabled_nodes':disabled,
             'driver_abi':'same producer kernel and module files','runtime_proof':'fresh nonce + USB + HTTP',
             'system_image':'unconfigured source artifact; never installed by this tool'}
-    record['bundle_version']=2
+    record['bundle_version']=3
     record['packager_source_commit']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     record['packager_tracked_source_dirty']=bool(subprocess.check_output(['git','status','--porcelain','--untracked-files=no'],cwd=ROOT,text=True).strip())
     record['memory_fixup_contract']='live verified SMEM version; 32-bit root/reserved-memory/ranges for version 0'
     record['init_heartbeat']='legacy USB gadget loaded by PID 1 before rcS'
+    record['android_transport']='reuse verified existing loopback ADB smart socket; no competing server or kill'
+    record['hardware_v2_result']='SMEM version 1; Linux/init not verified; factory recovery restored with SHA256 readback'
     # Keep build metadata and the manifest in sync with the final record.
     assets['audit/FULL_BUILD.json']=json.dumps(record,indent=2).encode()
-    assets['MANIFEST_SHA256.json']=json.dumps({'version':2,'files':{n:sha(b) for n,b in sorted(assets.items()) if n!='MANIFEST_SHA256.json'}},indent=2).encode()
-    dest=output/'INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip'
+    assets['MANIFEST_SHA256.json']=json.dumps({'version':3,'files':{n:sha(b) for n,b in sorted(assets.items()) if n!='MANIFEST_SHA256.json'}},indent=2).encode()
+    dest=output/'INFEND_JZ08_OPENWRT_FULL_TRIAL_V3.zip'
     with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for n,b in sorted(assets.items()):
             info=zipfile.ZipInfo(n,(2026,11,1,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16

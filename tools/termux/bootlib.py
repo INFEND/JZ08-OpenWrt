@@ -187,7 +187,7 @@ def boot_image(kernel,ramdisk,dtb,nonce,banks):
     if len(cmd)>=512:raise ValueError('cmdline слишком длинная')
     h=bytearray(2048);h[:8]=b'ANDROID!'
     struct.pack_into('<10I',h,8,len(kernel),ka,len(ramdisk),ra,0,0,ta,2048,len(q),0)
-    h[48:64]=b'JZ08-OPENWRT-V2'.ljust(16,b'\0');h[64:64+len(cmd)]=cmd
+    h[48:64]=b'JZ08-OPENWRT-V3'.ljust(16,b'\0');h[64:64+len(cmd)]=cmd
     digest=hashlib.sha1()
     for data in (kernel,ramdisk,b'',q):digest.update(data);digest.update(struct.pack('<I',len(data)))
     h[576:596]=digest.digest()

@@ -1,6 +1,8 @@
 """Regression tests for actual LK2ND placement and full-rootfs edits."""
-import gzip,struct,sys,unittest,urllib.error,io
+import gzip,struct,sys,unittest,urllib.error,io,importlib.util
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools/termux'))
@@ -18,6 +20,34 @@ def cpio_one():
     return b+bytes((-len(b))%4)
 
 class FullTrial(unittest.TestCase):
+    def entry(self):
+        spec=importlib.util.spec_from_file_location('jz08_trial_entry',ROOT/'tools/termux/__main__.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        return module
+    def args(self,**overrides):
+        values=dict.fromkeys(('selftest','flash','restore','report','postmortem','verify','prepare','ram_test','boot_only'),False)
+        values.update(overrides);return SimpleNamespace(**values)
+    def test_postmortem_cannot_reboot_restore_or_enter_a_write_chain(self):
+        for available in (True,False):
+            module=self.entry()
+            with patch.object(module,'package_check'),patch.object(module,'root_check'),\
+                 patch.object(module,'capture_android',return_value={'available':available}),\
+                 patch.object(module,'backup_check') as backup,patch.object(module,'legacy') as legacy,\
+                 patch.object(module,'restore') as restore,patch.object(module,'connected') as connected:
+                module.main(self.args(postmortem=True))
+                for call in (backup,legacy,restore,connected):call.assert_not_called()
+                self.assertFalse(module.STATE['linux_init_verified'])
+                self.assertEqual(module.STATE['status'],'STOCK_ANDROID_DIAGNOSTICS_CAPTURED' if available else 'STOCK_ANDROID_ADB_UNAVAILABLE')
+    def test_ram_trial_with_failed_initial_adb_never_changes_recovery(self):
+        module=self.entry()
+        with patch.object(module,'package_check'),patch.object(module,'root_check'),\
+             patch.object(module,'backup_check'),patch.object(module,'connected',return_value=False),\
+             patch.object(module,'capture_android',return_value={'available':False}),\
+             patch.object(module,'legacy') as legacy,patch.object(module,'restore') as restore:
+            with self.assertRaisesRegex(RuntimeError,'ADB JZ08'):
+                module.main(self.args(ram_test=True))
+            legacy.assert_not_called();restore.assert_not_called()
+            self.assertFalse(module.STATE.get('recovery_restore_required',False))
     def test_cpio_change_add_remove_and_runtime_password(self):
         b=rewrite(cpio_one(),{'init.openwrt':(0o100755,b'original'),'init':(0o100755,b'entry')})
         out={n:v for n,f,v in entries(b)}

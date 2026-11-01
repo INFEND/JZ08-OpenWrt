@@ -229,14 +229,9 @@ XARKON_PORTS = (5046, 5061, 5062, 5063)
 
 
 def adb_run(arguments, timeout=18, port=ADB_PORT):
-    if not ADB_BIN.is_file():
-        return 127, 'Termux adb binary not found'
-    cmd = ('export HOME=' + shlex.quote(str(Path.home())) +
-           ' TMPDIR=' + shlex.quote(PREFIX+'/tmp') +
-           ' ADB_LIBUSB=0 ADB_SERVER_PORT=' + str(port) + '; ' +
-           shlex.quote(str(ADB_BIN)) + ' -P ' + str(port) + ' ' +
-           ' '.join(shlex.quote(str(a)) for a in arguments))
-    return root(cmd, timeout)
+    from adbtransport import recovery_command
+    cp=recovery_command(arguments,timeout)
+    return cp.returncode,cp.stdout+cp.stderr
 
 
 def list_native_mifi():
@@ -264,12 +259,7 @@ def obtain_native_mifi():
             line('BLOCK','Несколько MIFI в ADB. Автовыбор запрещён.')
             return None
         time.sleep(1.5)
-    # Proven user-specific recovery: shut down only prior XARKON servers.
-    # Never touch Android debugging default 5037.
-    line('WARN', 'MiFi не появился. Перезапускаю только сеансы XARKON')
-    for port in XARKON_PORTS:
-        adb_run(['kill-server'], 7, port)
-    adb_run(['start-server'], 18)
+    line('WARN', 'Ожидание живого MIFI через существующий ADB-сервер')
     for attempt in range(12):
         targets = list_native_mifi()
         if len(targets) == 1:
