@@ -19,7 +19,8 @@
     },
     "p22_mib": 16,
     "p23_mib": 800,
-    "backup_sha256": "2271764802356a14b8d51ba0950abc9e1af3634e260d488cdd9128c3e4fb34bc"
+    "backup_sha256": "2271764802356a14b8d51ba0950abc9e1af3634e260d488cdd9128c3e4fb34bc",
+    "ram_bytes_reported_by_live_bootloader": 536870912
   },
   "usb": {
     "adb": [
@@ -54,7 +55,8 @@
     "openwrt_boot": false,
     "wifi": false,
     "lte": false,
-    "lcd_under_linux": false
+    "lcd_under_linux": false,
+    "ram_reported_by_live_bootloader": true
   },
   "forbidden_partitions": [
     "gpt",

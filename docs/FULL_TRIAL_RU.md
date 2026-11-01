@@ -1,4 +1,4 @@
-# INFEND JZ08 — полный OpenWrt RAM-комплект v1
+# INFEND JZ08 — полный OpenWrt RAM-комплект v2
 
 В комплекте настоящее ядро Linux 6.12.58, полный OpenWrt initramfs с его
 совпадающими модулями, русский LuCI, SSH, сетевые службы, ModemManager/rmtfs,
@@ -6,10 +6,10 @@
 первого испытания в RAM. Постоянная установка пока не готова: Linux/OpenWrt
 на физической JZ08, радио, LCD и схема постоянной загрузки ещё не проверены.
 
-Сохрани `INFEND_JZ08_OPENWRT_FULL_TRIAL.zip` в Download и запусти в Termux:
+Сохрани `INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip` в Download и запусти в Termux:
 
 ```bash
-python /storage/emulated/0/Download/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip --ram-test
+python /storage/emulated/0/Download/INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip --ram-test
 ```
 
 Требуются прежнее рабочее окружение S24/Magisk/Termux/EDL, USB-OTG и уже
@@ -36,6 +36,17 @@ USB-LuCI: `http://192.168.73.1/`, логин `root`. Новый случайны
 LuCI может возвращать HTTP 403 с заголовком `x-luci-login-required: yes`
 для штатной страницы входа; проверка распознаёт её по заголовку и HTML,
 а произвольную страницу 403 успехом не считает.
+
+В v2 USB heartbeat создаёт сам PID 1 до запуска служб OpenWrt. Признак
+`/init` отделён от подтверждения procd и HTTP LuCI. При возврате штатного
+Android ожидание завершается сразу и читаются доступные kernel/boot-журналы.
+
+Перед RAM-запуском проверяются три машинных инструкции сохранённого LK2ND
+и читается только его RAM-поле версии SMEM. Для версии 0 всё описание
+корневой шины и reserved-memory переводится в 32-битные ячейки с сохранением
+физических адресов; простая подмена одного memory/reg недопустима. Для версии
+1 и выше сохраняется исходный 64-битный формат. Неизвестный код загрузчика
+или неверный ответ блокирует RAM-запуск. Причина неудачи v1 пока не доказана.
 
 Служба USB использует совпадающий `g_ether` из этой сборки; CONFIGFS USB
 в исходном ядре выключен. Для первого испытания remoteproc/Wi-Fi, LED/GPIO

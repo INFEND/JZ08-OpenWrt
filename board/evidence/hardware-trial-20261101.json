@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-01",
+  "input_report_sha256": "a50b3b9425a79c626eab802426ed4785aa149b441839a15032c6dadabaddb372",
+  "kernel_ram_image_bytes": 27281408,
+  "loader_reported_ram_banks": [
+    {
+      "address": "0x80000000",
+      "bytes": 536870912
+    }
+  ],
+  "fastboot_accepted": true,
+  "linux_init_verified": false,
+  "openwrt_runtime_verified": false,
+  "recovery_restored_readback": true,
+  "factory_boot_aboot_and_gpt_rechecked_after_trial": true,
+  "stock_android_available_at_restore": true,
+  "previous_observer_recorded_return_time": false,
+  "cause": "unknown: no kernel log or init heartbeat in v1 report",
+  "static_risk": "preserved LK2ND uses single cells for SMEM table version 0; v1 image uses double cells",
+  "actual_device_smem_version": "not yet read; v2 probes verified loader code then its RAM version field",
+  "v2_changes": [
+    "conditional complete root-bus/reserved-memory/ranges cell conversion",
+    "PID1 early USB nonce independent of procd",
+    "early stock-Android detection and retained kernel/boot diagnostics"
+  ],
+  "persistent_install_allowed": false
+}

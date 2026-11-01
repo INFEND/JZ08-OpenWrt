@@ -19,7 +19,7 @@ def inspect(nonce):
     interfaces=[]
     for p in Path('/sys/bus/usb/devices').glob('*'):
         try:
-            if (p/'serial').read_text().strip()=='JZ08-OW1-'+nonce:
+            if (p/'serial').read_text().strip()=='JZ08-INIT-'+nonce:
                 interfaces.extend(n.name for n in p.glob('*/net/*'))
         except OSError:pass
     interfaces=sorted(set(interfaces))

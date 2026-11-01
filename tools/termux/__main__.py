@@ -13,7 +13,7 @@ STAGE=ROOT/'INFEND_JZ08_OPENWRT'
 REPORTS=ROOT/'XARKON_JZ08_REPORTS'
 PACKAGE=Path(sys.argv[0]).resolve()
 EXPECTED_SERIAL=None
-EVENTS=[];FILES={};STATE={'version':1,'runtime_kind':'full-openwrt','status':'START','linux_init_verified':False,'emmc_read_verified':False,
+EVENTS=[];FILES={};STATE={'version':2,'runtime_kind':'full-openwrt','status':'START','linux_init_verified':False,'emmc_read_verified':False,
                          'openwrt_installed':False,'full_system_flash_allowed':False,'hardware_test_in_this_environment':False,'openwrt_runtime_verified':False,'luci_http_verified':False}
 def say(message,kind='INFO'):
     EVENTS.append({'time':datetime.datetime.now().isoformat(timespec='seconds'),'kind':kind,'text':message})
@@ -173,7 +173,7 @@ def restore():
     say('Заводской recovery восстановлен и перечитан с проверкой SHA-256','OK')
 def usb_descriptor(nonce):
     # sysfs works without requiring an Android CDC ACM kernel driver.
-    code='from pathlib import Path\nfor p in Path("/sys/bus/usb/devices").glob("*"):\n try:\n  if (p/"idVendor").read_text().strip()=="1d6b" and (p/"idProduct").read_text().strip()=="0104" and (p/"serial").read_text().strip()=="JZ08-OW1-'+nonce+'":print("MATCH")\n except OSError:pass\n'
+    code='from pathlib import Path\nfor p in Path("/sys/bus/usb/devices").glob("*"):\n try:\n  if (p/"idVendor").read_text().strip()=="1d6b" and (p/"idProduct").read_text().strip()=="0104" and (p/"serial").read_text().strip()=="JZ08-INIT-'+nonce+'":print("MATCH")\n except OSError:pass\n'
     r=runroot([sys.executable,'-c',code],10)
     return r.returncode==0 and r.stdout.splitlines().count('MATCH')==1
 def capture_usb(nonce):
@@ -198,20 +198,40 @@ def capture_http(nonce):
         except ValueError:pass
     return {'descriptor_verified':True,'report_complete':False,'error':'USB HTTP read unavailable'}
 def observe(nonce,seconds=720):
-    end=time.monotonic()+seconds;last=-1;captured=False
+    from postmortem import USB_CODE,stock_android
+    end=time.monotonic()+seconds;last=-1;captured=False;previous_usb=None
     while time.monotonic()<end:
         elapsed=int(seconds-(end-time.monotonic()))
         if elapsed//10>last:last=elapsed//10;say(f'Ожидание Linux / USB: {elapsed} с')
+        r=runroot([sys.executable,'-c',USB_CODE],10)
+        try:usb=json.loads(r.stdout) if r.returncode==0 else []
+        except ValueError:usb=[]
+        if usb!=previous_usb:
+            previous_usb=usb
+            STATE.setdefault('usb_transitions',[]).append({'elapsed_seconds':elapsed,'devices':usb})
+            say('USB: '+(', '.join(d['vid']+':'+d['pid'] for d in usb) or 'цель не видна'))
+        if elapsed>5 and any(d['vid']=='05c6' and d['pid'] in ('9024','9091') for d in usb):
+            def adb(arguments,timeout):return runroot([str(PREFIX/'bin/adb'),'-P','5063']+arguments,timeout)
+            try:post=stock_android(adb)
+            except Exception as ex:
+                STATE['android_probe_error']=str(ex);post=None
+            if post:
+                FILES['android-postmortem.txt']=redact(post.pop('log'))
+                STATE['returned_to_stock_android']=post
+                if 'INFEND_JZ08_INIT_REACHED '+nonce in FILES['android-postmortem.txt']:
+                    STATE['linux_init_verified']=True;STATE['proof_channel']='Android retained log + fresh init nonce'
+                say('Подтверждён возврат штатного Android. Сохраняю журналы и завершаю ожидание.','WARN')
+                return
         if not captured and usb_descriptor(nonce):
             STATE['linux_init_verified']=True;STATE['proof_channel']='USB serial descriptor + fresh nonce'
             say('Подтверждено: новый Linux выполнил /init и сформировал USB-ответ','OK')
             proof=capture_http(nonce);STATE['usb_proof']=proof;captured=proof.get('report_complete',False)
-            STATE['openwrt_runtime_verified']=True
             STATE['luci_http_verified']=proof.get('luci_http_verified',False)
             if STATE['luci_http_verified']:
                 say('Подтверждён HTTP LuCI: http://192.168.73.1/ — пароль в INFEND_JZ08_ACCESS.txt','OK')
             if proof.get('report_complete'):
                 text=proof.get('text','');FILES['linux-usb-proof.txt']=redact(text)
+                STATE['openwrt_runtime_verified']='"rootfs_type": "initramfs"' in text and 'OPENWRT_RELEASE=' in text
                 STATE['emmc_read_verified']=bool(re.search(r'\[/sys/block/mmcblk0/size\]\s+7634944\s',text))
                 STATE['emmc_readonly']=('BLOCK mmcblk0 force_readonly=1' in text)
                 if STATE['emmc_read_verified']:say('Linux прочитал геометрию eMMC: 7 634 944 сектора','OK')
@@ -255,7 +275,18 @@ def main(args):
         require(connected(),'LK2ND не найден после recovery-цепочки')
         oem=get_staged(['oem','dtb'],'oem-dtb.bin');banks=FDT(oem).memory()
         STATE['oem_ram_banks']=[{'address':hex(a),'bytes':n} for a,n in banks]
-        dt=FDT(read('bin/jz08.dtb'));dt.set_memory(banks)
+        from lkprobe import memory_table_version,parse_read_word
+        def read_word(address):
+            r=fb(['oem','debug','readl',hex(address)])
+            require(r.returncode==0,'Не прочитан LK2ND RAM fixup contract; RAM-запуск остановлен')
+            return parse_read_word(r.stdout+r.stderr)
+        version=memory_table_version(read_word)
+        dt=FDT(read('bin/jz08.dtb'))
+        if version==0:dt.use_32bit_root()
+        dt.set_memory(banks)
+        STATE['memory_fixup']={'smem_version':version,'root_address_cells':int.from_bytes(dt.nodes['/']['#address-cells'],'big'),
+                               'live_loader_getter_verified':True}
+        say('SMEM RAM table: версия '+str(version)+'; DTB cells: '+str(STATE['memory_fixup']['root_address_cells']),'OK')
         nonce=secrets.token_hex(16);STATE['nonce']=nonce
         (STAGE/'last-run.json').write_text(json.dumps({'nonce':nonce,'time':STAMP}))
         from cpio import credentials

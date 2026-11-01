@@ -88,9 +88,61 @@ class FDT:
     def set_memory(self,banks):
         paths=[p for p,v in self.nodes.items() if p.count('/')==1 and v.get('device_type')==b'memory\0']
         if len(paths)!=1:raise ValueError('JZ08 DTB: ожидается один memory node')
-        if self.nodes['/']['#address-cells']!=struct.pack('>I',2) or self.nodes['/']['#size-cells']!=struct.pack('>I',2):
-            raise ValueError('JZ08 DTB: ожидаются 64-bit cells')
-        self.nodes[paths[0]]['reg']=b''.join(struct.pack('>QQ',a,n) for a,n in banks)
+        ac=int.from_bytes(self.nodes['/']['#address-cells'],'big')
+        sc=int.from_bytes(self.nodes['/']['#size-cells'],'big')
+        if ac not in (1,2) or sc not in (1,2):raise ValueError('JZ08 DTB: неподдерживаемые memory cells')
+        try:self.nodes[paths[0]]['reg']=b''.join(a.to_bytes(4*ac,'big')+n.to_bytes(4*sc,'big') for a,n in banks)
+        except OverflowError as ex:raise ValueError('RAM не представима в memory cells') from ex
+
+    def use_32bit_root(self):
+        """Preserve addresses while accepting LK2ND's SMEM-v0 memory fixup.
+
+        Narrow only the root bus, its ranges translations and reserved-memory.
+        Internal buses, phandles, interrupts and device registers are unchanged.
+        Reject anything above 4 GiB rather than truncating an address.
+        """
+        root=self.nodes['/']
+        if (root.get('#address-cells'),root.get('#size-cells'))!=(struct.pack('>I',2),struct.pack('>I',2)):
+            raise ValueError('DTB: преобразование требует исходные root cells 2/2')
+        def narrow(value):
+            if len(value)!=8 or value[:4]!=bytes(4):raise ValueError('DTB: адрес/размер выше 32-bit')
+            return value[4:]
+        def tuples(value):
+            if len(value)%16:raise ValueError('DTB: неверный root reg/alloc-ranges')
+            return b''.join(narrow(value[i:i+8])+narrow(value[i+8:i+16]) for i in range(0,len(value),16))
+        # Build all edits before applying them: malformed input cannot leave a
+        # partially converted tree usable by a caller that catches the error.
+        edits=[]
+        for path,p in self.nodes.items():
+            if path=='/' or path.count('/')!=1:continue
+            for key in ('reg','linux,usable-memory'):
+                if key in p:edits.append((p,key,tuples(p[key])))
+            for key in ('ranges','dma-ranges'):
+                if not p.get(key):continue
+                ca=int.from_bytes(p.get('#address-cells',struct.pack('>I',2)),'big')
+                cs=int.from_bytes(p.get('#size-cells',struct.pack('>I',1)),'big')
+                if ca not in (1,2) or cs not in (0,1,2):raise ValueError('DTB: bus cells')
+                stride=4*(ca+2+cs);value=p[key]
+                if len(value)%stride:raise ValueError('DTB: root ranges')
+                converted=b''.join(value[i:i+4*ca]+narrow(value[i+4*ca:i+4*ca+8])+value[i+4*ca+8:i+stride]
+                                   for i in range(0,len(value),stride))
+                edits.append((p,key,converted))
+        reserved=self.nodes.get('/reserved-memory')
+        if reserved:
+            if (reserved.get('#address-cells'),reserved.get('#size-cells'))!=(struct.pack('>I',2),struct.pack('>I',2)):
+                raise ValueError('DTB: reserved-memory cells должны совпадать с root')
+            for path,p in self.nodes.items():
+                if not path.startswith('/reserved-memory/') or path.count('/')!=2:continue
+                for key in ('reg','alloc-ranges'):
+                    if key in p:edits.append((p,key,tuples(p[key])))
+                for key in ('size','alignment'):
+                    if key in p:edits.append((p,key,narrow(p[key])))
+            edits.extend((reserved,key,struct.pack('>I',1)) for key in ('#address-cells','#size-cells'))
+        for key in ('linux,usable-memory-range','linux,elfcorehdr'):
+            p=self.nodes.get('/chosen',{})
+            if key in p:edits.append((p,key,tuples(p[key])))
+        edits.extend((root,key,struct.pack('>I',1)) for key in ('#address-cells','#size-cells'))
+        for p,key,value in edits:p[key]=value
 
 def initramfs(init):
     if init[:4]!=b'\x7fELF' or init[4]!=2 or struct.unpack_from('<H',init,18)[0]!=183:
@@ -135,7 +187,7 @@ def boot_image(kernel,ramdisk,dtb,nonce,banks):
     if len(cmd)>=512:raise ValueError('cmdline слишком длинная')
     h=bytearray(2048);h[:8]=b'ANDROID!'
     struct.pack_into('<10I',h,8,len(kernel),ka,len(ramdisk),ra,0,0,ta,2048,len(q),0)
-    h[48:64]=b'JZ08-OPENWRT-V1'.ljust(16,b'\0');h[64:64+len(cmd)]=cmd
+    h[48:64]=b'JZ08-OPENWRT-V2'.ljust(16,b'\0');h[64:64+len(cmd)]=cmd
     digest=hashlib.sha1()
     for data in (kernel,ramdisk,b'',q):digest.update(data);digest.update(struct.pack('<I',len(data)))
     h[576:596]=digest.digest()

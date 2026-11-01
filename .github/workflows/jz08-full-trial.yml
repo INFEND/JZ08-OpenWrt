@@ -60,14 +60,14 @@ jobs:
           mkdir -p output/full-trial
           aarch64-linux-gnu-gcc -static -Os -Wall -Wextra -Werror -fno-ident -Wl,--build-id=none runtime/jz08-init.c -o output/full-trial/init.arm64
           python3 ci/build_full_trial.py --archive producer/JZ08_EXPERIMENTAL_INSPECTION_NOT_FLASHABLE.zip --init output/full-trial/init.arm64 --output output/full-trial
-          python3 output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip --selftest
-          (cd output/full-trial && sha256sum -c INFEND_JZ08_OPENWRT_FULL_TRIAL.zip.sha256)
+          python3 output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip --selftest
+          (cd output/full-trial && sha256sum -c INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip.sha256)
       - uses: actions/upload-artifact@v4
         with:
-          name: INFEND_JZ08_OPENWRT_FULL_TRIAL
+          name: INFEND_JZ08_OPENWRT_FULL_TRIAL_V2
           path: |
-            output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip
-            output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip.sha256
+            output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip
+            output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip.sha256
             output/full-trial/FULL_BUILD.json
             PRODUCER_DEEP_AUDIT.json
           if-no-files-found: error
@@ -76,5 +76,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view full-ram-trial-v1 >/dev/null 2>&1 || gh release create full-ram-trial-v1 --prerelease --title "JZ08 full OpenWrt RAM trial v1 — hardware unverified" --notes-file docs/FULL_TRIAL_RU.md
-          gh release upload full-ram-trial-v1 output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL.zip.sha256 output/full-trial/FULL_BUILD.json --clobber
+          gh release view full-ram-trial-v2 >/dev/null 2>&1 || gh release create full-ram-trial-v2 --prerelease --title "JZ08 full OpenWrt RAM trial v2 — hardware unverified" --notes-file docs/FULL_TRIAL_RU.md
+          gh release upload full-ram-trial-v2 output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip output/full-trial/INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip.sha256 output/full-trial/FULL_BUILD.json --clobber

@@ -11,7 +11,7 @@ start() {
         modprobe "$m" || return 1
     done
     modprobe g_ether idVendor=0x1d6b idProduct=0x0104 \
-        iSerialNumber="JZ08-OW1-$nonce" iManufacturer=INFEND \
+        iSerialNumber="JZ08-INIT-$nonce" iManufacturer=INFEND \
         iProduct=JZ08_OpenWrt dev_addr=02:73:00:00:00:01 host_addr=02:73:00:00:00:02 || return 1
     /etc/init.d/network reload
     # Runtime proof stays on tmpfs and is exposed only on the local USB LAN.

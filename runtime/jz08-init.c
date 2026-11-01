@@ -15,6 +15,27 @@
 #include <stdlib.h>
 #include <string.h>
 #include <dirent.h>
+#include <sys/wait.h>
+
+static int module(char *const argv[]) {
+    pid_t child=fork();int status;
+    if(child<0)return -1;
+    if(child==0){execv("/sbin/modprobe",argv);_exit(127);}
+    if(waitpid(child,&status,0)<0)return -1;
+    return WIFEXITED(status)?WEXITSTATUS(status):-1;
+}
+static int early_usb(const char *nonce) {
+    const char *names[]={"libcomposite","u_ether","usb_f_ecm","usb_f_ecm_subset","usb_f_rndis"};
+    for(unsigned int i=0;i<sizeof(names)/sizeof(names[0]);i++) {
+        char *args[]={"modprobe",(char *)names[i],NULL};
+        if(module(args))return -1;
+    }
+    char serial[64];snprintf(serial,sizeof(serial),"iSerialNumber=JZ08-INIT-%s",nonce);
+    char *args[]={"modprobe","g_ether","idVendor=0x1d6b","idProduct=0x0104",serial,
+                  "iManufacturer=INFEND","iProduct=JZ08_OpenWrt",
+                  "dev_addr=02:73:00:00:00:01","host_addr=02:73:00:00:00:02",NULL};
+    return module(args);
+}
 
 static void copy(FILE *out,const char *name) {
     char b[4096];FILE *in=fopen(name,"r");fprintf(out,"[%s]\n",name);
@@ -39,6 +60,10 @@ int main(int argc,char **argv) {
     f=fopen("/jz08-init-proof.txt","w");if(!f)return 5;
     fprintf(f,"BEGIN %s\nINIT=INFEND_JZ08_FULL_OPENWRT\n",nonce);
     printf("INFEND_JZ08_INIT_REACHED %s\n",nonce);fflush(stdout);
+    /* Do not wait for rcS/network to expose the first /init heartbeat. */
+    int usb=early_usb(nonce);
+    fprintf(f,"EARLY_USB_MODULES=%d\n",usb==0);
+    printf("INFEND_JZ08_EARLY_USB_MODULES=%d\n",usb==0);fflush(stdout);
     for(int wait=0;wait<15 && access("/sys/block/mmcblk0/dev",R_OK);wait++)sleep(1);
     int ok=1,count=0;fputs("PERSISTENT_MOUNTS=0\n",f);
     DIR *blocks=opendir("/sys/class/block");struct dirent *entry;

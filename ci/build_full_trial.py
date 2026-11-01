@@ -100,9 +100,13 @@ def assemble(archive,init,output):
             'memory_size_source':'live OEM DTB, never guessed','disabled_nodes':disabled,
             'driver_abi':'same producer kernel and module files','runtime_proof':'fresh nonce + USB + HTTP',
             'system_image':'unconfigured source artifact; never installed by this tool'}
+    record['bundle_version']=2
+    record['memory_fixup_contract']='live verified SMEM version; 32-bit root/reserved-memory/ranges for version 0'
+    record['init_heartbeat']='legacy USB gadget loaded by PID 1 before rcS'
+    # Keep build metadata and the manifest in sync with the final record.
     assets['audit/FULL_BUILD.json']=json.dumps(record,indent=2).encode()
-    assets['MANIFEST_SHA256.json']=json.dumps({'version':1,'files':{n:sha(b) for n,b in sorted(assets.items())}},indent=2).encode()
-    dest=output/'INFEND_JZ08_OPENWRT_FULL_TRIAL.zip'
+    assets['MANIFEST_SHA256.json']=json.dumps({'version':2,'files':{n:sha(b) for n,b in sorted(assets.items()) if n!='MANIFEST_SHA256.json'}},indent=2).encode()
+    dest=output/'INFEND_JZ08_OPENWRT_FULL_TRIAL_V2.zip'
     with zipfile.ZipFile(dest,'w',zipfile.ZIP_DEFLATED,compresslevel=9) as z:
         for n,b in sorted(assets.items()):
             info=zipfile.ZipInfo(n,(2026,11,1,0,0,0));info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o100644<<16
