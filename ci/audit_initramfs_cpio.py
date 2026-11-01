@@ -112,13 +112,16 @@ def audit(path):
                     raise ValueError("invalid cpio symlink size: " + name)
                 stream.seek(data_start)
                 raw_target = stream.read(filesize)
+                # Linux gen_init_cpio may store a single terminal NUL.
+                # Reject embedded NULs, but accept this canonical encoding.
+                if raw_target.endswith(b"\x00"):
+                    raw_target = raw_target[:-1]
+                if not raw_target or b"\x00" in raw_target:
+                    raise ValueError("invalid cpio symlink target: " + name)
                 try:
-                    target = raw_target.decode("utf-8")
+                    record["target"] = raw_target.decode("utf-8")
                 except UnicodeDecodeError as exc:
-                    raise ValueError("invalid cpio symlink target") from exc
-                if not target or "\x00" in target:
-                    raise ValueError("invalid cpio symlink target")
-                record["target"] = target
+                    raise ValueError("invalid cpio symlink target: " + name) from exc
             records[name] = record
             stream.seek(align4(data_end))
             if stream.tell() > total:
