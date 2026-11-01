@@ -90,6 +90,21 @@ class RootfsRuntimeAudit(unittest.TestCase):
         report = audit_module.audit(self.root)
         self.assertTrue(any("execute bit" in x for x in report["errors"]))
 
+    def test_oem_preinit_formatter_rejected(self):
+        path = self.root / "lib/preinit/79-format-rootfs-data"
+        path.parent.mkdir(parents=True)
+        path.write_text("mkfs.ext4 -F /dev/mmcblk0p15")
+        report = audit_module.audit(self.root)
+        self.assertEqual(report["status"], "REJECTED_USERSPACE")
+        self.assertFalse(report["known_storage_mutators_absent"])
+
+    def test_rmtfs_autostart_rejected(self):
+        path = self.root / "etc/rc.d/S15rmtfs"
+        path.parent.mkdir(parents=True)
+        path.symlink_to("../init.d/rmtfs")
+        report = audit_module.audit(self.root)
+        self.assertTrue(any("unsafe OEM/NV service autostart" in x for x in report["errors"]))
+
     def test_dynamic_loader_must_be_in_rootfs(self):
         (self.root / "bin/busybox").write_bytes(fake_elf(interpreter="/lib/ld-musl-aarch64.so.1"))
         report = audit_module.audit(self.root)

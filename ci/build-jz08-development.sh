@@ -24,6 +24,16 @@ git -C "$OW" checkout --detach FETCH_HEAD
 test "$(git -C "$OW" rev-parse HEAD)" = "$PIN_OW"
 cp -a "$UP/msm89xx" "$OW/target/linux/msm89xx"
 cp -a "$UP/packages" "$OW/package/msm8916"
+# Retain rmtfs binary but disable its OEM NV-backed automatic startup.
+python3 - "$OW/package/msm8916/rmtfs/files/rmtfs.init" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+s = p.read_text()
+if s.count("\nSTART=15\n") != 1:
+    raise SystemExit("FATAL: pinned rmtfs init startup policy changed")
+p.write_text(s.replace("\nSTART=15\n", "\nSTART=\n", 1))
+PY
 python3 "$ROOT/ci/prepare_jz08.py" --upstream "$UP" --openwrt "$OW"
 # Correct two old directory prefixes in the pinned, public upstream patch.
 sed -e 's#a/oopenwrt/#a/#g' -e 's#a/openwrt/#a/#g' -e 's#b/openwrt/#b/#g' "$UP/enable_wcn36xx_mac80211.patch" > "$WORK/wcn36xx.patch"
@@ -55,6 +65,13 @@ if grep -Eiq 'error: recursive dependency detected|error: symbol .* depends on' 
   exit 1
 fi
 cp "$WORK/jz08-kconfig.log" "$ROOT/output/JZ08_KCONFIG.log.txt"
+# Never include the pinned upstream automatic p15 formatter or OEM dumper.
+for forbidden in prepare-rootfs-data msm-firmware-dumper; do
+  if grep -Fxq "CONFIG_PACKAGE_${forbidden}=y" "$OW/.config"; then
+    echo "FATAL: unsafe OEM storage package selected: $forbidden" >&2
+    exit 1
+  fi
+done
 grep -Fxq 'CONFIG_TARGET_ROOTFS_INITRAMFS=y' "$OW/.config" || {
   echo "FATAL: embedded initramfs for RAM-only test was deselected" >&2
   exit 1

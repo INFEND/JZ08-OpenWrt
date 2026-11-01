@@ -19,6 +19,12 @@ REQUIRED = (
 
 
 EXECUTABLES = frozenset(REQUIRED) - {"usr/lib/lua/luci/i18n/base.ru.lmo"}
+FORBIDDEN_FILES = frozenset((
+    "lib/preinit/79-format-rootfs-data",
+    "etc/init.d/msm-firmware-dumper",
+    "usr/bin/msm-firmware-dumper",
+))
+FORBIDDEN_AUTOSTART = frozenset(("rmtfs", "msm-firmware-dumper"))
 
 
 def resolve_member(records, name):
@@ -59,6 +65,22 @@ def require_real_required_members(records):
             raise ValueError("required initramfs file is empty: " + name)
         if name in EXECUTABLES and not record["mode"] & 0o111:
             raise ValueError("required initramfs executable lacks execute bit: " + name)
+
+
+def reject_known_storage_mutators(records):
+    for name in FORBIDDEN_FILES:
+        if name in records:
+            raise ValueError("unsafe OEM storage component in initramfs: " + name)
+    for name, record in records.items():
+        if not name.startswith("etc/rc.d/S"):
+            continue
+        link = name.rsplit("/", 1)[-1]
+        if len(link) < 4 or not link[1:3].isdigit():
+            continue
+        service = link[3:]
+        target = record.get("target", "").rsplit("/", 1)[-1]
+        if service in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART:
+            raise ValueError("unsafe OEM/NV service autostart in initramfs: " + name)
 
 
 def align4(value):
@@ -140,6 +162,7 @@ def audit(path):
     if missing:
         raise ValueError("incomplete initramfs: missing={}".format(missing))
     require_real_required_members(records)
+    reject_known_storage_mutators(records)
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
@@ -153,6 +176,7 @@ def audit(path):
         "flash_allowed": False,
         "hardware_tested": False,
         "linux_init_executed": False,
+        "known_dangerous_startup_paths_absent": True,
     }
 
 

@@ -119,6 +119,30 @@ class InitramfsAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid cpio filename"):
             cpio.audit(self.path)
 
+    def test_oem_preinit_formatter_rejected(self):
+        self.write()
+        self.path.write_bytes(
+            newc("lib/preinit/79-format-rootfs-data", b"mkfs.ext4 /dev/mmcblk0p15")
+            + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "unsafe OEM storage"):
+            cpio.audit(self.path)
+
+    def test_firmware_dumper_rejected(self):
+        self.write()
+        self.path.write_bytes(
+            newc("usr/bin/msm-firmware-dumper", b"OEM firmware extraction")
+            + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "unsafe OEM storage"):
+            cpio.audit(self.path)
+
+    def test_rmtfs_autostart_rejected(self):
+        self.write()
+        self.path.write_bytes(
+            newc("etc/rc.d/S15rmtfs", b"../init.d/rmtfs", mode=0o120777)
+            + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "unsafe OEM/NV service autostart"):
+            cpio.audit(self.path)
+
     def test_invalid_magic_fails(self):
         self.write()
         self.path.write_bytes(b"BADBAD" + self.path.read_bytes()[6:])

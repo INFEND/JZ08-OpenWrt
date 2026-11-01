@@ -9,7 +9,7 @@ define Device/generic-jz08-3000-nkv
   CMDLINE := "earlycon console=ttyMSM0,115200 root=PARTLABEL=jz08-unconfigured-rootfs rootwait"
   ARTIFACTS :=
   DEVICE_PACKAGES := configs-mifi wpad-basic-wolfssl rmtfs uci-usb-gadget \
-                     block-mount f2fs-tools prepare-rootfs-data msm-firmware-dumper \
+                     block-mount f2fs-tools \
                      luci luci-base luci-i18n-base-ru modemmanager
 endef
 TARGET_DEVICES += generic-jz08-3000-nkv

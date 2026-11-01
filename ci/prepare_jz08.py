@@ -52,7 +52,9 @@ def run(upstream: pathlib.Path, openwrt: pathlib.Path):
     # the CI build must detect and report that, never claim a valid image.
     required = ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager")
     removed = ("CONFIG_PACKAGE_router-display=",
-               "CONFIG_PACKAGE_kmod-fbtft-gc9107=")
+               "CONFIG_PACKAGE_kmod-fbtft-gc9107=",
+               "CONFIG_PACKAGE_prepare-rootfs-data=",
+               "CONFIG_PACKAGE_msm-firmware-dumper=")
     overrides = tuple(f"CONFIG_PACKAGE_{name}=" for name in required) + ("CONFIG_TARGET_ROOTFS_INITRAMFS=",)
     filtered = [
         line for line in old.splitlines()

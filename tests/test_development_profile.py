@@ -18,6 +18,8 @@ class DevelopmentProfile(unittest.TestCase):
         self.assertIn("root=PARTLABEL=jz08-unconfigured-rootfs", text)
         for pkg in ("luci", "luci-base", "luci-i18n-base-ru", "modemmanager"):
             self.assertIn(pkg, text)
+        for forbidden in ("prepare-rootfs-data", "msm-firmware-dumper"):
+            self.assertNotIn(forbidden, text)
 
     def test_rootfs_content_audit_uses_supported_strict_extraction(self):
         script = (ROOT / "ci/build-jz08-development.sh").read_text()
@@ -63,6 +65,8 @@ class DevelopmentProfile(unittest.TestCase):
             self.assertIn("CONFIG_TARGET_msm89xx_msm8916_DEVICE_generic-jz08-3000-nkv=y", config)
             self.assertIn("CONFIG_TARGET_ROOTFS_INITRAMFS=y", config)
             self.assertNotIn("CONFIG_PACKAGE_router-display=y", config)
+            self.assertNotIn("CONFIG_PACKAGE_prepare-rootfs-data=y", config)
+            self.assertNotIn("CONFIG_PACKAGE_msm-firmware-dumper=y", config)
             patch = (target / "patches-6.12/809-arm64-dts-jz08-prototype.patch").read_text()
             self.assertIn("msm8916-generic-jz08-3000-nkv.dtb", patch)
             self.assertIn('status = "disabled"', patch)

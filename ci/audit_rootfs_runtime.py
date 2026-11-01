@@ -17,6 +17,12 @@ REQUIRED = ("/sbin/init", "/bin/busybox")
 # $(LUA_LIBRARYDIR)/luci/i18n, with LUA_LIBRARYDIR=/usr/lib/lua.
 # Package manifest presence alone does not prove the Russian catalog exists.
 REQUIRED_ASSETS = ("/usr/lib/lua/luci/i18n/base.ru.lmo",)
+FORBIDDEN_FILES = (
+    "/lib/preinit/79-format-rootfs-data",
+    "/etc/init.d/msm-firmware-dumper",
+    "/usr/bin/msm-firmware-dumper",
+)
+FORBIDDEN_AUTOSTART = ("rmtfs", "msm-firmware-dumper")
 OBSERVED = (
     "/sbin/procd", "/usr/sbin/uhttpd", "/usr/sbin/ModemManager",
     "/usr/sbin/rmtfs", "/www/cgi-bin/luci",
@@ -149,7 +155,24 @@ def audit(root: Path):
                 "file" if p.is_file() else ("directory" if p.is_dir() else "missing")}
         except (OSError, ValueError) as exc:
             observed[logical] = {"present": False, "reason": str(exc)}
+    for logical in FORBIDDEN_FILES:
+        try:
+            path = resolve_rootfs(root, logical)
+            if path.exists() or path.is_symlink():
+                errors.append("unsafe OEM storage component in rootfs: " + logical)
+        except (OSError, ValueError) as exc:
+            errors.append(logical + ": " + str(exc))
+    for path in (root / "etc/rc.d").glob("S[0-9][0-9]*"):
+        name = path.name[3:]
+        try:
+            target = os.readlink(path).rsplit("/", 1)[-1] if path.is_symlink() else ""
+            if name in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART:
+                errors.append("unsafe OEM/NV service autostart in rootfs: " + path.name)
+        except OSError as exc:
+            errors.append(path.name + ": " + str(exc))
     return {
+        "known_storage_mutators_absent": not any(
+            error.startswith("unsafe OEM") for error in errors),
         "status": "OFFLINE_USERSPACE_CHECK_PASS_ONLY" if not errors else "REJECTED_USERSPACE",
         "flash_allowed": False,
         "hardware_tested": False,

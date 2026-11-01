@@ -163,9 +163,12 @@ def require_matching_rootfs_audit(actual, claimed):
             and actual.get("rootfs_executed") is False
             and actual.get("errors") == [],
             "independently extracted rootfs fails runtime checks")
+    require(actual.get("known_storage_mutators_absent") is True,
+            "independently extracted rootfs contains OEM storage startup code")
     for field in ("status", "flash_allowed", "hardware_tested",
                   "rootfs_executed", "errors", "required_elf",
-                  "required_assets", "observed_paths_not_boot_proof"):
+                  "required_assets", "observed_paths_not_boot_proof",
+                   "known_storage_mutators_absent"):
         require(actual.get(field) == claimed.get(field),
                 "published runtime audit differs from extracted system.img: " + field)
 
@@ -328,9 +331,11 @@ def verify_real_payloads(zf):
         actual_cpio = audit_cpio(cpio)
         require_embedded_initramfs(initramfs_kernel, cpio)
         claimed_cpio = json.loads(zf.read("audit/JZ08_INITRAMFS_CPIO_AUDIT.json"))
+        require(claimed_cpio.get("known_dangerous_startup_paths_absent") is True,
+                "published initramfs audit lacks OEM storage safety gate")
         for field in ("status", "archive_sha256", "archive_bytes", "entries",
                       "required_paths", "flash_allowed", "hardware_tested",
-                      "linux_init_executed"):
+                      "linux_init_executed", "known_dangerous_startup_paths_absent"):
             require(claimed_cpio.get(field) == actual_cpio[field],
                     "embedded initramfs audit differs from actual CPIO: " + field)
 
@@ -373,6 +378,8 @@ def verify_real_payloads(zf):
                         for row in runtime["required_assets"].values()),
                 "published runtime audit does not confirm AArch64 and Russian LuCI")
         require_observed_service_files(runtime)
+        require(runtime.get("known_storage_mutators_absent") is True,
+                "published rootfs audit lacks OEM storage safety gate")
         verify_actual_rootfs(system, runtime)
     return "INDEPENDENT_REAL_PAYLOAD_AND_ROOTFS_CONTENT_VERIFIED_NOT_BOOT_PROOF"
 

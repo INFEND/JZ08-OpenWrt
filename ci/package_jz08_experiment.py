@@ -82,6 +82,8 @@ def assemble(source, openwrt):
     required(runtime["status"] == "OFFLINE_USERSPACE_CHECK_PASS_ONLY"
              and not runtime["errors"] and runtime["flash_allowed"] is False,
              "extracted rootfs runtime audit did not pass")
+    required(runtime.get("known_storage_mutators_absent") is True,
+             "unsafe OEM storage startup path in extracted rootfs")
     for entry in runtime["required_elf"].values():
         required(entry.get("valid") is True, "required AArch64 ELF invalid")
     required(runtime["required_assets"], "Russian LuCI assets not audited")
@@ -137,6 +139,8 @@ def assemble(source, openwrt):
     required(cpio_audit["status"] == "INITRAMFS_CPIO_CONTENTS_VERIFIED_NOT_BOOT_PROOF"
              and cpio_audit["flash_allowed"] is False,
              "embedded initramfs contents audit failed")
+    required(cpio_audit.get("known_dangerous_startup_paths_absent") is True,
+             "unsafe OEM storage startup path in initramfs")
     # The archive may originate from Linux usr/initramfs_data.cpio or
     # OpenWrt's separate KERNEL_BUILD_DIR/initrd.cpio.
     cpio = locate(openwrt)
