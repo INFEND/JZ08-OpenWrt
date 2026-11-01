@@ -143,6 +143,29 @@ class InitramfsAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsafe OEM/NV service autostart"):
             cpio.audit(self.path)
 
+    def test_noncanonical_member_aliases_rejected(self):
+        # These resolve to the same paths in Linux but previously evaded
+        # exact-name checks for the OEM formatter and rmtfs autostart.
+        aliases = (
+            "lib//preinit/79-format-rootfs-data",
+            "lib/./preinit/79-format-rootfs-data",
+            "lib/preinit/../preinit/79-format-rootfs-data",
+            "etc/rc.d//S15rmtfs",
+            "etc/rc.d/./S15rmtfs",
+            "././lib/preinit/79-format-rootfs-data",
+        )
+        for name in aliases:
+            with self.subTest(name=name):
+                self.write()
+                self.path.write_bytes(newc(name) + self.path.read_bytes())
+                with self.assertRaisesRegex(ValueError, "unsafe or noncanonical cpio path"):
+                    cpio.audit(self.path)
+
+    def test_single_leading_dot_prefix_remains_accepted(self):
+        self.write()
+        self.path.write_bytes(newc("./extra-safe-file") + self.path.read_bytes())
+        self.assertEqual(cpio.audit(self.path)["entries"], len(cpio.REQUIRED) + 1)
+
     def test_invalid_magic_fails(self):
         self.write()
         self.path.write_bytes(b"BADBAD" + self.path.read_bytes()[6:])
