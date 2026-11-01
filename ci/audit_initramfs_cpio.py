@@ -131,11 +131,16 @@ def audit(path):
                     if chunk.strip(b"\x00"):
                         raise ValueError("nonzero data after cpio trailer")
                 break
+            # Kernel/VFS path lookup treats repeated separators and interior
+            # dot components as aliases. Reject noncanonical member names so
+            # forbidden OEM startup paths cannot bypass exact-name checks.
+            # A single leading "./" is accepted for common newc producers.
             if name.startswith("./"):
                 name = name[2:]
             parts = PurePosixPath(name).parts
-            if not name or name.startswith("/") or ".." in parts:
-                raise ValueError("unsafe cpio path")
+            if (not name or name.startswith("/") or ".." in parts
+                    or PurePosixPath(name).as_posix() != name):
+                raise ValueError("unsafe or noncanonical cpio path")
             if name in records:
                 raise ValueError("duplicate cpio path: " + name)
             record = {"size": filesize, "mode": mode}
