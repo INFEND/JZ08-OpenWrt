@@ -67,6 +67,19 @@ class InitramfsAuditTests(unittest.TestCase):
         self.path.write_bytes(payload + self.path.read_bytes())
         self.assertEqual(cpio.audit(self.path)["entries"], len(cpio.REQUIRED))
 
+    def test_linux_gen_init_cpio_nul_terminated_symlink(self):
+        self.write(omit=("init",))
+        payload = newc("init", b"sbin/init\x00", mode=0o120777)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        self.assertEqual(cpio.audit(self.path)["entries"], len(cpio.REQUIRED))
+
+    def test_symlink_embedded_nul_rejected(self):
+        self.write(omit=("init",))
+        payload = newc("init", b"sbin\x00/init", mode=0o120777)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "invalid cpio symlink target"):
+            cpio.audit(self.path)
+
     def test_broken_required_symlink_fails(self):
         self.write(omit=("init",))
         payload = newc("init", b"missing/executable", mode=0o120777)
