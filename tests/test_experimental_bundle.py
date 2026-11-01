@@ -71,6 +71,7 @@ class EngineeringBundleTests(unittest.TestCase):
             "status": "INITRAMFS_CPIO_CONTENTS_VERIFIED_NOT_BOOT_PROOF",
             "flash_allowed": False, "archive_sha256": digest(cpio),
             "archive_bytes": cpio.stat().st_size,
+            "known_dangerous_startup_paths_absent": True,
         }))
         self.audit = {
             "status": "BUILD_CHECKS_PASS_ONLY", "errors": [],
@@ -91,6 +92,7 @@ class EngineeringBundleTests(unittest.TestCase):
         self.runtime = {
             "status": "OFFLINE_USERSPACE_CHECK_PASS_ONLY", "errors": [],
             "flash_allowed": False,
+            "known_storage_mutators_absent": True,
             "required_elf": {"/sbin/init": {"valid": True},
                              "/bin/busybox": {"valid": True}},
             "required_assets": {

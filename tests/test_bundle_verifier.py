@@ -264,6 +264,7 @@ class IndependentBundleVerificationTests(unittest.TestCase):
             "flash_allowed": False,
             "hardware_tested": False,
             "rootfs_executed": False,
+            "known_storage_mutators_absent": True,
             "errors": [],
             "required_elf": {
                 "/sbin/init": {"valid": True, "sha256": "a" * 64}
