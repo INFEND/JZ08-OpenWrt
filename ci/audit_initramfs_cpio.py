@@ -24,7 +24,10 @@ FORBIDDEN_FILES = frozenset((
     "etc/init.d/msm-firmware-dumper",
     "usr/bin/msm-firmware-dumper",
 ))
-FORBIDDEN_AUTOSTART = frozenset(("rmtfs", "msm-firmware-dumper"))
+FORBIDDEN_AUTOSTART = frozenset((
+    "rmtfs", "msm-firmware-dumper", "fstab", "gpio_switch", "led",
+    "battery-monitor", "usb-gadget", "qrtrns", "modemmanager",
+))
 
 
 def resolve_member(records, name):
@@ -83,7 +86,7 @@ def reject_known_storage_mutators(records):
         service = link[3:]
         target = record.get("target", "").rsplit("/", 1)[-1]
         if service in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART:
-            raise ValueError("unsafe OEM/NV service autostart in initramfs: " + name)
+            raise ValueError("unsafe unverified hardware/storage service autostart in initramfs: " + name)
 
 
 def align4(value):

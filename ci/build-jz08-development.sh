@@ -58,6 +58,9 @@ sudo -E bash "$UP/devenv/dependencies.sh"
 cd "$OW"
 ./scripts/feeds update -a
 ./scripts/feeds install -a
+# Keep required packages installed, but do not touch unverified GPIO, LEDs,
+# USB gadget, modem/NV or block-mount services during a first RAM-only boot.
+python3 "$ROOT/ci/disable_unverified_startup.py" --openwrt "$OW"
 make defconfig > "$WORK/jz08-kconfig.log" 2>&1 || { cat "$WORK/jz08-kconfig.log"; exit 1; }
 if grep -Eiq 'error: recursive dependency detected|error: symbol .* depends on' "$WORK/jz08-kconfig.log"; then
   echo "FATAL: Kconfig error even if make defconfig returned zero" >&2

@@ -22,7 +22,10 @@ FORBIDDEN_FILES = (
     "/etc/init.d/msm-firmware-dumper",
     "/usr/bin/msm-firmware-dumper",
 )
-FORBIDDEN_AUTOSTART = ("rmtfs", "msm-firmware-dumper")
+FORBIDDEN_AUTOSTART = (
+    "rmtfs", "msm-firmware-dumper", "fstab", "gpio_switch", "led",
+    "battery-monitor", "usb-gadget", "qrtrns", "modemmanager",
+)
 OBSERVED = (
     "/sbin/procd", "/usr/sbin/uhttpd", "/usr/sbin/ModemManager",
     "/usr/sbin/rmtfs", "/www/cgi-bin/luci",
@@ -167,7 +170,7 @@ def audit(root: Path):
         try:
             target = os.readlink(path).rsplit("/", 1)[-1] if path.is_symlink() else ""
             if name in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART:
-                errors.append("unsafe OEM/NV service autostart in rootfs: " + path.name)
+                errors.append("unsafe unverified hardware/storage service autostart in rootfs: " + path.name)
         except OSError as exc:
             errors.append(path.name + ": " + str(exc))
     return {

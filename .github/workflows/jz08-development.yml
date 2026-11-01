@@ -7,6 +7,7 @@ on:
       - ci/prepare_jz08.py
       - ci/check_built_jz08.py
       - ci/audit_rootfs_runtime.py
+      - ci/disable_unverified_startup.py
       - ci/audit_initramfs_cpio.py
       - ci/locate_initramfs_cpio.py
       - ci/package_jz08_experiment.py

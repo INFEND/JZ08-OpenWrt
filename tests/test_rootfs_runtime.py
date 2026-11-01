@@ -105,6 +105,23 @@ class RootfsRuntimeAudit(unittest.TestCase):
         report = audit_module.audit(self.root)
         self.assertTrue(any("unsafe OEM/NV service autostart" in x for x in report["errors"]))
 
+    def test_unverified_hardware_storage_modem_autostart_rejected(self):
+        rc = self.root / "etc/rc.d"
+        rc.mkdir(parents=True)
+        for priority, service in (
+            (11, "fstab"), (94, "gpio_switch"), (96, "led"),
+            (99, "battery-monitor"), (99, "usb-gadget"),
+            (60, "qrtrns"), (70, "modemmanager"),
+        ):
+            with self.subTest(service=service):
+                link = rc / f"S{priority:02d}{service}"
+                link.symlink_to(f"../init.d/{service}")
+                report = audit_module.audit(self.root)
+                self.assertEqual(report["status"], "REJECTED_USERSPACE")
+                self.assertTrue(any("unsafe unverified hardware/storage service autostart" in e
+                                    for e in report["errors"]))
+                link.unlink()
+
     def test_dynamic_loader_must_be_in_rootfs(self):
         (self.root / "bin/busybox").write_bytes(fake_elf(interpreter="/lib/ld-musl-aarch64.so.1"))
         report = audit_module.audit(self.root)

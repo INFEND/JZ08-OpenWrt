@@ -140,8 +140,22 @@ class InitramfsAuditTests(unittest.TestCase):
         self.path.write_bytes(
             newc("etc/rc.d/S15rmtfs", b"../init.d/rmtfs", mode=0o120777)
             + self.path.read_bytes())
-        with self.assertRaisesRegex(ValueError, "unsafe OEM/NV service autostart"):
+        with self.assertRaisesRegex(ValueError, "unsafe unverified hardware/storage service autostart"):
             cpio.audit(self.path)
+
+    def test_unverified_gpio_storage_and_modem_autostart_rejected(self):
+        for priority, service in (
+            (11, "fstab"), (94, "gpio_switch"), (96, "led"),
+            (99, "battery-monitor"), (99, "usb-gadget"),
+            (60, "qrtrns"), (70, "modemmanager"),
+        ):
+            with self.subTest(service=service):
+                self.write()
+                link = f"etc/rc.d/S{priority:02d}{service}"
+                payload = newc(link, f"../init.d/{service}".encode(), mode=0o120777)
+                self.path.write_bytes(payload + self.path.read_bytes())
+                with self.assertRaisesRegex(ValueError, "unsafe unverified hardware/storage service autostart"):
+                    cpio.audit(self.path)
 
     def test_noncanonical_member_aliases_rejected(self):
         # These resolve to the same paths in Linux but previously evaded
