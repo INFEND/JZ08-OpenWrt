@@ -43,6 +43,51 @@ class InitramfsAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "incomplete initramfs"):
             cpio.audit(self.path)
 
+    def test_directory_named_as_required_executable_fails(self):
+        for name in ("init", "usr/sbin/ModemManager", "usr/sbin/rmtfs",
+                     "www/cgi-bin/luci"):
+            with self.subTest(name=name):
+                self.write(omit=(name,))
+                payload = self.path.read_bytes()
+                payload = newc(name, b"", mode=0o040755) + payload
+                self.path.write_bytes(payload)
+                with self.assertRaisesRegex(ValueError, "not a regular file"):
+                    cpio.audit(self.path)
+
+    def test_required_executable_without_execute_bit_fails(self):
+        self.write(omit=("usr/sbin/ModemManager",))
+        payload = newc("usr/sbin/ModemManager", b"ELF", mode=0o100644)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "execute bit"):
+            cpio.audit(self.path)
+
+    def test_valid_required_symlink_to_regular_executable(self):
+        self.write(omit=("init",))
+        payload = newc("init", b"sbin/init", mode=0o120777)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        self.assertEqual(cpio.audit(self.path)["entries"], len(cpio.REQUIRED))
+
+    def test_broken_required_symlink_fails(self):
+        self.write(omit=("init",))
+        payload = newc("init", b"missing/executable", mode=0o120777)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "not a regular file"):
+            cpio.audit(self.path)
+
+    def test_required_symlink_escape_fails(self):
+        self.write(omit=("init",))
+        payload = newc("init", b"../outside", mode=0o120777)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "escapes archive root"):
+            cpio.audit(self.path)
+
+    def test_required_symlink_loop_fails(self):
+        self.write(omit=("init",))
+        payload = newc("init", b"init", mode=0o120777)
+        self.path.write_bytes(payload + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "symlink loop"):
+            cpio.audit(self.path)
+
     def test_invalid_magic_fails(self):
         self.write()
         self.path.write_bytes(b"BADBAD" + self.path.read_bytes()[6:])
