@@ -5,12 +5,60 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 
+REGULAR = 0o100000
+SYMLINK = 0o120000
+TYPE_MASK = 0o170000
+
 REQUIRED = (
     "init", "sbin/init", "bin/busybox", "sbin/procd",
     "usr/sbin/ModemManager", "usr/sbin/rmtfs",
     "usr/sbin/uhttpd", "www/cgi-bin/luci",
     "usr/lib/lua/luci/i18n/base.ru.lmo",
 )
+
+
+
+EXECUTABLES = frozenset(REQUIRED) - {"usr/lib/lua/luci/i18n/base.ru.lmo"}
+
+
+def resolve_member(records, name):
+    """Resolve symlinks inside CPIO, never against the host filesystem."""
+    pending = list(PurePosixPath(name).parts)
+    components = []
+    links = 0
+    while pending:
+        component = pending.pop(0)
+        if component in ("", "."):
+            continue
+        if component == "..":
+            if not components:
+                raise ValueError("initramfs symlink escapes archive root: " + name)
+            components.pop()
+            continue
+        candidate = "/".join(components + [component])
+        record = records.get(candidate)
+        if record and (record["mode"] & TYPE_MASK) == SYMLINK:
+            links += 1
+            if links > 40:
+                raise ValueError("initramfs symlink loop: " + name)
+            target = record["target"]
+            if target.startswith("/"):
+                components = []
+            pending = target.split("/") + pending
+        else:
+            components.append(component)
+    return records.get("/".join(components))
+
+
+def require_real_required_members(records):
+    for name in REQUIRED:
+        record = resolve_member(records, name)
+        if record is None or (record["mode"] & TYPE_MASK) != REGULAR:
+            raise ValueError("required initramfs path is not a regular file: " + name)
+        if record["size"] == 0:
+            raise ValueError("required initramfs file is empty: " + name)
+        if name in EXECUTABLES and not record["mode"] & 0o111:
+            raise ValueError("required initramfs executable lacks execute bit: " + name)
 
 
 def align4(value):
@@ -58,17 +106,27 @@ def audit(path):
                 raise ValueError("unsafe cpio path")
             if name in records:
                 raise ValueError("duplicate cpio path: " + name)
-            records[name] = {"size": filesize, "mode": mode}
+            record = {"size": filesize, "mode": mode}
+            if (mode & TYPE_MASK) == SYMLINK:
+                if not 1 <= filesize <= 4096:
+                    raise ValueError("invalid cpio symlink size: " + name)
+                stream.seek(data_start)
+                raw_target = stream.read(filesize)
+                try:
+                    target = raw_target.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise ValueError("invalid cpio symlink target") from exc
+                if not target or "\x00" in target:
+                    raise ValueError("invalid cpio symlink target")
+                record["target"] = target
+            records[name] = record
             stream.seek(align4(data_end))
             if stream.tell() > total:
                 raise ValueError("invalid cpio padding")
     missing = sorted(set(REQUIRED) - records.keys())
-    empty = sorted(name for name in REQUIRED if name in records and
-                   records[name]["size"] == 0 and
-                   (records[name]["mode"] & 0o170000) != 0o040000)
-    if missing or empty:
-        raise ValueError("incomplete initramfs: missing={} empty={}".format(
-            missing, empty))
+    if missing:
+        raise ValueError("incomplete initramfs: missing={}".format(missing))
+    require_real_required_members(records)
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
