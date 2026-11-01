@@ -157,6 +157,17 @@ class InitramfsAuditTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "unsafe unverified hardware/storage service autostart"):
                     cpio.audit(self.path)
 
+    def test_chained_init_symlink_cannot_hide_modem_autostart(self):
+        self.write()
+        hidden = (
+            newc("etc/init.d/modemmanager", b"#!/bin/sh\n")
+            + newc("etc/init.d/alias", b"modemmanager", mode=0o120777)
+            + newc("etc/rc.d/S70alias", b"../init.d/alias", mode=0o120777)
+        )
+        self.path.write_bytes(hidden + self.path.read_bytes())
+        with self.assertRaisesRegex(ValueError, "unsafe unverified hardware/storage service autostart"):
+            cpio.audit(self.path)
+
     def test_noncanonical_member_aliases_rejected(self):
         # These resolve to the same paths in Linux but previously evaded
         # exact-name checks for the OEM formatter and rmtfs autostart.

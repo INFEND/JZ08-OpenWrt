@@ -175,7 +175,11 @@ def audit(root: Path):
         name = path.name[3:]
         try:
             target = os.readlink(path).rsplit("/", 1)[-1] if path.is_symlink() else ""
-            if name in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART:
+            # Follow the entire link chain inside the extracted rootfs.
+            # S70alias -> ../init.d/alias -> modemmanager must not bypass the gate.
+            resolved = resolve_rootfs(root, "/" + path.relative_to(root).as_posix())
+            if (name in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART
+                    or (path.is_symlink() and resolved.name in FORBIDDEN_AUTOSTART)):
                 errors.append("unsafe unverified hardware/storage service autostart in rootfs: " + path.name)
         except OSError as exc:
             errors.append(path.name + ": " + str(exc))

@@ -91,7 +91,15 @@ def reject_known_storage_mutators(records):
             continue
         service = link[3:]
         target = record.get("target", "").rsplit("/", 1)[-1]
-        if service in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART:
+        # Follow aliases rather than trusting only the immediate link name.
+        # A service may be hidden behind /etc/init.d/alias -> modemmanager.
+        resolved = resolve_member(records, name)
+        alias_to_forbidden = resolved is not None and any(
+            resolved is resolve_member(records, "etc/init.d/" + forbidden)
+            for forbidden in FORBIDDEN_AUTOSTART
+        )
+        if (service in FORBIDDEN_AUTOSTART or target in FORBIDDEN_AUTOSTART
+                or alias_to_forbidden):
             raise ValueError("unsafe unverified hardware/storage service autostart in initramfs: " + name)
 
 

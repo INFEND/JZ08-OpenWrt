@@ -123,6 +123,20 @@ class RootfsRuntimeAudit(unittest.TestCase):
                                     for e in report["errors"]))
                 link.unlink()
 
+    def test_chained_init_symlink_cannot_hide_modem_autostart(self):
+        init = self.root / "etc/init.d"
+        rc = self.root / "etc/rc.d"
+        init.mkdir(parents=True)
+        rc.mkdir(parents=True)
+        (init / "modemmanager").write_text("#!/bin/sh\n")
+        (init / "alias").symlink_to("modemmanager")
+        (rc / "S70alias").symlink_to("../init.d/alias")
+        report = audit_module.audit(self.root)
+        self.assertEqual(report["status"], "REJECTED_USERSPACE")
+        self.assertFalse(report["known_storage_mutators_absent"])
+        self.assertTrue(any("unsafe unverified hardware/storage service autostart" in e
+                            for e in report["errors"]))
+
     def test_dynamic_loader_must_be_in_rootfs(self):
         (self.root / "bin/busybox").write_bytes(fake_elf(interpreter="/lib/ld-musl-aarch64.so.1"))
         report = audit_module.audit(self.root)
