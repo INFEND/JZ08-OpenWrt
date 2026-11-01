@@ -103,7 +103,7 @@ class RootfsRuntimeAudit(unittest.TestCase):
         path.parent.mkdir(parents=True)
         path.symlink_to("../init.d/rmtfs")
         report = audit_module.audit(self.root)
-        self.assertTrue(any("unsafe OEM/NV service autostart" in x for x in report["errors"]))
+        self.assertTrue(any("unsafe unverified hardware/storage service autostart" in x for x in report["errors"]))
 
     def test_unverified_hardware_storage_modem_autostart_rejected(self):
         rc = self.root / "etc/rc.d"
